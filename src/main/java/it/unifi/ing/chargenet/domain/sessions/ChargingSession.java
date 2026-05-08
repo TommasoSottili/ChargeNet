@@ -63,11 +63,8 @@ public class ChargingSession {
             this.kwhDelivered += kwhThisTick;
             this.costTotal = this.costTotal.add(costThisTick);
 
-            // 2. Simula l'incremento della batteria
-            // Assumiamo una batteria media da 50 kWh per la simulazione
-            double ASSUMED_BATTERY_CAPACITY_KWH = 50.0;
             // Calcola quanta percentuale rappresenta l'energia appena immessa
-            double percentageGained = (kwhThisTick / ASSUMED_BATTERY_CAPACITY_KWH) * 100.0;
+            double percentageGained = (kwhThisTick / driver.getBatteryCapacity()) * 100.0;
             // Aggiorna la batteria corrente, assicurandoci che non superi mai il 100%
             this.batteryCurrent = Math.min(100.0, this.batteryCurrent + percentageGained);
             // Opzionale: Se la batteria raggiunge il 100%, la sessione potrebbe auto-completarsi
@@ -75,7 +72,6 @@ public class ChargingSession {
                 this.complete();
             }
         }
-
     }
 
     public void complete() {

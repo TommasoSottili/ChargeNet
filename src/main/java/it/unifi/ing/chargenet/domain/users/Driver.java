@@ -9,18 +9,20 @@ public class Driver extends User {
     private SubscriptionPlan subscriptionPlan;
     private BigDecimal walletBalance;
     private Double batteryPercentage;
+    private Double batteryCapacity;
     private ConnectorType connectorType;
 
     protected  Driver() {
         super();
     }
 
-    public Driver(Double latitude, Double longitude, ConnectorType connectorType, SubscriptionPlan subscriptionPlan, String name, String email, String password) {
+    public Driver(Double latitude, Double longitude, ConnectorType connectorType, SubscriptionPlan subscriptionPlan, Double batteryCapacity, String name, String email, String password) {
         super(name, password, email, Role.DRIVER);
         this.latitude = latitude;
         this.longitude = longitude;
         this.connectorType = connectorType;
         this.subscriptionPlan = subscriptionPlan;
+        this.batteryCapacity = batteryCapacity;
         this.walletBalance = BigDecimal.ZERO;
         this.batteryPercentage = null;
     }
@@ -46,6 +48,8 @@ public class Driver extends User {
     public void setWalletBalance(BigDecimal walletBalance) {
         this.walletBalance = walletBalance;
     }
+    public Double getBatteryCapacity() { return batteryCapacity; }
+    public void setBatteryCapacity(Double batteryCapacity) { this.batteryCapacity = batteryCapacity; }
     public Double getBatteryPercentage() {
         return batteryPercentage;
     }
