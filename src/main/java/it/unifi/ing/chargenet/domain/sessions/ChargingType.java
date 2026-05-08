@@ -1,6 +1,6 @@
 package it.unifi.ing.chargenet.domain.sessions;
 
-public enum ChargingStrategy {
+public enum ChargingType {
     FAST,
     ECO,
 }
