@@ -1,0 +1,230 @@
+@startuml ChargeNet_BusinessLayer
+
+title ChargeNet - Business Layer (Service & Coordination)
+
+skinparam titleFontSize 30
+top to bottom direction
+
+skinparam linetype ortho
+skinparam shadowing false
+skinparam roundcorner 10
+skinparam classAttributeIconSize 0
+skinparam nodesep 60
+skinparam ranksep 70
+
+skinparam defaultFontName Arial
+skinparam BorderColor #333333
+skinparam ArrowColor #333333
+
+skinparam class {
+    BackgroundColor #FFFFFF
+}
+
+skinparam package {
+    FontStyle bold
+}
+
+' ==========================================
+'  DOMAIN LAYER (Riferimento Esterno)
+' ==========================================
+package "domain" as PKG_DOMAIN #FFFFFF {
+    together {
+        class PowerTransformer
+        interface Subject
+        interface Observer
+        enum TransformerEvent
+    }
+}
+
+' ==========================================
+'  BUSINESS LAYER
+' ==========================================
+package "business" as PKG_BUSINESS #FFFFFF {
+
+    package "core" as PKG_CORE #FFFFFF {
+
+        class GridMonitor <<Thread Daemon>> {
+            - sessionService: SessionService
+            - stationService: StationService
+            - ratingService: RatingService
+            __
+            + run(): void
+            - onTick(): void
+            - processActiveSessions(): void
+            - processTransformers(): void
+            - expireShortTermHolds(): void
+            - checkRatingAlerts(): void
+        }
+
+        class GridCluster <<Singleton>> {
+            - {static} instance: GridCluster
+            - transformers: List<PowerTransformer>
+            - transformerDao: TransformerDao
+            - stationDao: StationDao
+            __
+            + {static} getInstance(): GridCluster
+            + init(tDao, sDao): void
+            + getTransformers(): List<PowerTransformer>
+            + getStationsForTransformer(id: int): List<ChargingStation>
+            + getNearestAvailable(...): List<ChargingStation>
+        }
+    }
+
+    package "strategies" as PKG_STRATEGIES #FFFFFF {
+
+        interface ChargingStrategy <<interface>> {
+            + calculateCost(kwh: double, station: ChargingStation, driver: Driver): double
+            + getHeatIncrement(): double
+            + getName(): String
+        }
+
+        class FastChargeStrategy {
+            + calculateCost(...): double
+            + getHeatIncrement(): double
+        }
+
+        class EcoChargeStrategy {
+            + calculateCost(...): double
+            + getHeatIncrement(): double
+        }
+    }
+
+    package "services" as PKG_SERVICES #FFFFFF {
+
+        class SessionService <<Service>> {
+            - sessionDao: SessionDao
+            - transactionDao: TransactionDao
+            __
+            + openSession(...): ChargingSession
+            + addTick(session: ChargingSession, strategy: ChargingStrategy): void
+            + closeSession(session: ChargingSession): Transaction
+            + forceClose(session: ChargingSession): Transaction
+        }
+
+        class LoadBalancerService <<Observer>> {
+            - sessionService: SessionService
+            - stationDao: StationDao
+            __
+            + update(src: Subject, event: TransformerEvent): void
+            - handleThermalAlert(transformer: PowerTransformer): void
+            - handleCoolingComplete(transformer: PowerTransformer): void
+        }
+
+        class StationService <<Service>> {
+            - stationDao: StationDao
+            __
+            + registerStation(...): void
+            + hold(driver: Driver, station: ChargingStation): void
+            + cancelHold(driver: Driver, station: ChargingStation): void
+            + expireHolds(): void
+            + findNearestAvailable(driver: Driver): List<ChargingStation>
+        }
+
+        class AuthService <<Service>> {
+            - userDao: UserDao
+            __
+            + register(...): User
+            + login(...): User
+            + logout(): void
+        }
+
+        class ValidationService <<Service>> {
+            - stationDao: StationDao
+            __
+            + testStation(station: ChargingStation): boolean
+            + approve(station: ChargingStation, platformTariff: double): void
+            + reject(station: ChargingStation, motivation: String): void
+        }
+
+        class RatingService <<Service>> {
+            - ratingDao: RatingDao
+            - ratingAlertDao: RatingAlertDao
+            __
+            + leaveRating(...): Rating
+            + checkRatingAlerts(): void
+            - checkRatingAlert(station: ChargingStation): void
+        }
+
+        class WalletService <<Service>> {
+            - userDao: UserDao
+            - transactionDao: TransactionDao
+            __
+            + fundWallet(driver: Driver, amount: double): Transaction
+            + changePlan(driver: Driver, plan: SubscriptionPlan): Transaction
+        }
+    }
+}
+
+' ==========================================
+'  DAO LAYER (Riferimento Esterno)
+' ==========================================
+package "dao.interfaces" as PKG_DAO #FFFFFF {
+    Interface GenericDao<T> <<interface>> {
+        + save(entity: T): void
+        + findById(id: int): T
+        + findAll(): List<T>
+        + update(entity: T): void
+        + delete(id: int): void
+    }
+}
+
+' ══════════════════════════════════════════════
+'  POSIZIONAMENTO (Layout)
+' ══════════════════════════════════════════════
+PKG_DOMAIN -[hidden]down- PKG_BUSINESS
+PKG_BUSINESS -[hidden]down- PKG_DAO
+
+GridMonitor -[hidden]right- GridCluster
+GridCluster -[hidden]down- SessionService
+
+AuthService -[hidden]right- StationService
+ValidationService -[hidden]right- RatingService
+WalletService -[hidden]right- SessionService
+
+' ══════════════════════════════════════════════
+'  RELAZIONI CORE & PATTERNS
+' ══════════════════════════════════════════════
+
+PKG_SERVICES ..> PKG_DOMAIN : <<manipulates>>
+
+' --- PATTERN OBSERVER ---
+PowerTransformer .up.|> Subject : <<implements>>
+LoadBalancerService .up.|> Observer : <<implements>>
+Subject "1" -down-> "*" Observer : notifies >
+LoadBalancerService --> PowerTransformer : observes >
+LoadBalancerService --> TransformerEvent : receives >
+
+' --- PATTERN STRATEGY ---
+SessionService --> ChargingStrategy : <<uses>>
+ChargingStrategy <|.. FastChargeStrategy
+ChargingStrategy <|.. EcoChargeStrategy
+
+' --- ORCHESTRAZIONE DAEMON ---
+GridMonitor --> SessionService : tick/billing >
+GridMonitor --> StationService : expire holds >
+GridMonitor --> RatingService : check alerts >
+GridMonitor --> GridCluster : queries >
+
+' --- DEPENDENCY INVERSION (Business -> DAO) ---
+' Freccia generica per non incasinare il diagramma con 20 frecce verso i singoli DAO
+PKG_SERVICES ..> PKG_DAO : <<injected DAOs>>
+
+' ══════════════════════════════════════════════
+'  NOTE ARCHITETTURALI
+' ══════════════════════════════════════════════
+
+note left of PKG_SERVICES
+  <b>Architectural Rule:</b>
+  Tutti i Service orchestrano il Domain Model
+  e incapsulano le transazioni JDBC iniettando
+  le interfacce dal package DAO.
+end note
+
+note top of GridMonitor
+  <b>Thread Safety:</b>
+  Il Monitor delega le operazioni 
+  ai Service, che applicano lock 
+  sul database (ACID).
+end note
+
+@enduml

@@ -1,0 +1,210 @@
+@startuml ChargeNet_dao
+
+skinparam shadowing false
+skinparam ClassAttributeIconSize 0
+skinparam Linetype ortho
+skinparam RoundCorner 10
+skinparam Nodesep 40
+skinparam Ranksep 40
+skinparam defaultFontName Arial
+skinparam DefaultFontSize 12
+skinparam BorderColor #333333
+skinparam ArrowColor #333333
+top to bottom direction
+
+skinparam class {
+  BackgroundColor #FFFFFF
+}
+
+skinparam package {
+  BorderColor #8c8c8c
+  FontStyle   bold
+}
+
+package "dao" {
+
+  package "interfaces" {
+
+    interface GenericDao<T> {
+      + save(entity: T): void
+      + findById(id: int): T
+      + findAll(): List<T>
+      + update(entity: T): void
+      + delete(id: int): void
+    }
+
+    interface UserDao {
+      + findByEmail(mail: String): User
+      + findByRole(role: Role): List<User>
+    }
+    GenericDao <|-- UserDao
+
+    interface StationDao {
+      + findByStatus(status: StationStatus): List<ChargingStation>
+      + findByOperator(operatorId: int): List<ChargingStation>
+      + findByConnectorType(type: ConnectorType): List<ChargingStation>
+      + findNearestAvailable(lat: double, lng: double, type: ConnectorType, excludeId: int): List<ChargingStation>
+      + findByTransformer(transformerId: int): List<ChargingStation>
+      + expireHolds(): void
+      + findActive(): List<ChargingStation>
+    }
+    GenericDao <|-- StationDao
+
+    interface TransformerDao {
+      + findOverheated(): List<PowerTransformer>
+    }
+    GenericDao <|-- TransformerDao
+
+    interface SessionDao {
+      + findByDriver(driverId: int): List<ChargingSession>
+      + findActiveSessions(): List<ChargingSession>
+      + findActiveByStation(stationId: int): List<ChargingSession>
+    }
+    GenericDao <|-- SessionDao
+
+    interface TransactionDao {
+      + findByDriver(driverId: int): List<Transaction>
+      + findByType(type: TransactionType): List<Transaction>
+    }
+    GenericDao <|-- TransactionDao
+
+    interface RatingDao {
+      + findByStation(stationId: int): List<Rating>
+      + findByDriver(driverId: int): List<Rating>
+      + existsByDriverAndSession(driverId: int, sessionId: int): boolean
+    }
+    GenericDao <|-- RatingDao
+
+    interface RatingAlertDao {
+      + findByStatus(status: RatingAlertStatus): List<RatingAlert>
+      + existsOpenAlertForStation(stationId: int): boolean
+      + findByStation(stationId: int): List<RatingAlert>
+    }
+    GenericDao <|-- RatingAlertDao
+
+  }
+
+  package "postgres" {
+
+    class DatabaseManager {
+      - {static} URL: String
+      - {static} USER: String
+      - {static} PASSWORD: String
+
+      + {static} getConnection(): Connection
+      + {static} initializeDatabase(): void
+    }
+
+    class PostgresUserDao {
+      - connection: Connection
+      + PostgresUserDao(connection: Connection)
+      + save(user: User): void
+      + findById(id: int): User
+      + findAll(): List<User>
+      + update(user: User): void
+      + delete(id: int): void
+      + findByEmail(email: String): User
+      + findByRole(role: Role): List<User>
+    }
+    UserDao <|.. PostgresUserDao
+    PostgresUserDao ..> DatabaseManager : <<use>>
+
+    class PostgresStationDao {
+      - connection: Connection
+      + PostgresStationDao(connection: Connection)
+      + save(station: ChargingStation): void
+      + findById(id: int): ChargingStation
+      + findAll(): List<ChargingStation>
+      + update(station: ChargingStation): void
+      + delete(id: int): void
+      + findByStatus(status: StationStatus): List<ChargingStation>
+      + findByOperator(operatorId: int): List<ChargingStation>
+      + findByConnectorType(type: ConnectorType): List<ChargingStation>
+      + findNearestAvailable(lat: double, lng: double, type: ConnectorType, excludeId: int): List<ChargingStation>
+      + findByTransformer(transformerId: int): List<ChargingStation>
+      + findActive(): List<ChargingStation>
+      + expireHolds(): void
+    }
+    StationDao <|.. PostgresStationDao
+    PostgresStationDao ..> DatabaseManager : <<use>>
+
+    class PostgresTransformerDao {
+      - connection: Connection
+      + PostgresTransformerDao(connection: Connection)
+      + save(transformer: PowerTransformer): void
+      + findById(id: int): PowerTransformer
+      + findAll(): List<PowerTransformer>
+      + update(transformer: PowerTransformer): void
+      + delete(id: int): void
+      + findOverheated(): List<PowerTransformer>
+    }
+    TransformerDao <|.. PostgresTransformerDao
+    PostgresTransformerDao ..> DatabaseManager : <<use>>
+
+    class PostgresSessionDao {
+      - connection: Connection
+      + PostgresSessionDao(connection: Connection)
+      + save(session: ChargingSession): void
+      + findById(id: int): ChargingSession
+      + findAll(): List<ChargingSession>
+      + update(session: ChargingSession): void
+      + delete(id: int): void
+      + findByDriver(driverId: int): List<ChargingSession>
+      + findActiveSessions(): List<ChargingSession>
+      + findActiveByStation(stationId: int): List<ChargingSession>
+    }
+    SessionDao <|.. PostgresSessionDao
+    PostgresSessionDao ..> DatabaseManager : <<use>>
+
+    class PostgresTransactionDao {
+      - connection: Connection
+      + PostgresTransactionDao(connection: Connection)
+      + save(transaction: Transaction): void
+      + findById(id: int): Transaction
+      + findAll(): List<Transaction>
+      + update(transaction: Transaction): void
+      + delete(id: int): void
+      + findByDriver(driverId: int): List<Transaction>
+      + findByType(type: TransactionType): List<Transaction>
+    }
+    TransactionDao <|.. PostgresTransactionDao
+    PostgresTransactionDao ..> DatabaseManager : <<use>>
+
+    class PostgresRatingDao {
+      - connection: Connection
+      --
+      + PostgresRatingDao(connection: Connection)
+      + save(rating: Rating): void
+      + findById(id: int): Rating
+      + findAll(): List<Rating>
+      + update(rating: Rating): void
+      + delete(id: int): void
+      + findByStation(stationId: int): List<Rating>
+      + findByDriver(driverId: int): List<Rating>
+      + existsByDriverAndSession(driverId: int, sessionId: int): boolean
+    }
+    RatingDao <|.. PostgresRatingDao
+    PostgresRatingDao ..> DatabaseManager : <<use>>
+
+    class PostgresRatingAlertDao {
+      - connection: Connection
+      --
+      + PostgresRatingAlertDao(connection: Connection)
+      + save(alert: RatingAlert): void
+      + findById(id: int): RatingAlert
+      + findAll(): List<RatingAlert>
+      + update(alert: RatingAlert): void
+      + delete(id: int): void
+      + findByStatus(status: RatingAlertStatus): List<RatingAlert>
+      + existsOpenAlertForStation(stationId: int): boolean
+      + findByStation(stationId: int): List<RatingAlert>
+    }
+    RatingAlertDao <|.. PostgresRatingAlertDao
+    PostgresRatingAlertDao ..> DatabaseManager : <<use>>
+  }
+
+}
+
+"dao.interfaces" -[hidden]down- "dao.postgres"
+
+@enduml

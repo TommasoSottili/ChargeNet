@@ -1,0 +1,100 @@
+@startuml ChargeNet_Package_Diagram
+skinparam ClassAttributeIconSize 0
+skinparam shadowing false
+skinparam RoundCorner 10
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+skinparam Linetype ortho
+top to bottom direction
+
+skinparam class {
+    BackgroundColor #FFFFFF
+}
+
+skinparam package {
+    BorderColor #8c8c8c
+    FontStyle bold
+}
+
+skinparam package<<ui>> {
+    BackgroundColor #BEE3F8
+}
+skinparam package<<business>> {
+    BackgroundColor #C6F6D5
+}
+skinparam package<<domain>> {
+    BackgroundColor #FEFCBF
+}
+skinparam package<<persistence>> {
+    BackgroundColor #FED7D7
+}
+
+' ==========================================
+' PRESENTATION LAYER (UI)
+' ==========================================
+package "presentation" <<ui>> as presentation {
+    package "navigation"
+    package "session"
+    package "controller" 
+}
+
+' ==========================================
+' BUSINESS LAYER (LOGIC)
+' ==========================================
+package "business" <<business>> as business {
+    package "services" 
+}
+
+' ==========================================
+' DOMAIN LAYER (MODELS)
+' ==========================================
+package "domain" <<domain>> as domain {
+    package "users"
+    package "stations"
+    package "sessions"
+    package "billing"
+}
+
+' ==========================================
+' DAO LAYER (PERSISTENCE)
+' ==========================================
+package "dao" <<persistence>> as dao {
+    package "interfaces" 
+    package "postgres" 
+}
+
+database "PostgreSQL" 
+
+' ==========================================
+' RELAZIONI E DIPENDENZE
+' ==========================================
+controller ..> services : <<invokes>>
+presentation ..> domain : <<uses>>
+
+services ..> interfaces : <<uses>>
+services ..> domain : <<manipulates>>
+
+postgres ..> interfaces : <<implements>>
+dao ..> domain : <<maps>>
+
+postgres ..> PostgreSQL : <<persists>>
+
+' ==========================================
+' ALLINEAMENTO SPAZIALE FORZATO
+' ==========================================
+presentation -[hidden]down- business
+business -[hidden]down- domain
+domain -[hidden]down- dao
+
+' ==========================================
+' LEGENDA
+' ==========================================
+legend bottom left
+|= Colore |= Layer Architetturale |
+| <back:#BEE3F8>   </back> | Presentation (UI) |
+| <back:#C6F6D5>   </back> | Business Logic |
+| <back:#FEFCBF>   </back> | Domain Model |
+| <back:#FED7D7>   </back> | Persistence (DAO) |
+endlegend
+
+@enduml
