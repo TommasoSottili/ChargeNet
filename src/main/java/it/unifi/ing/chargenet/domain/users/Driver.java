@@ -14,6 +14,7 @@ public class Driver extends User {
     protected  Driver() {
         super();
     }
+
     public Driver(Double latitude, Double longitude, ConnectorType connectorType, SubscriptionPlan subscriptionPlan, String name, String email, String password) {
         super(name, password, email, Role.DRIVER);
         this.latitude = latitude;
@@ -57,21 +58,25 @@ public class Driver extends User {
     public void setConnectorType(ConnectorType connectorType) {
         this.connectorType = connectorType;
     }
+
     public double getDiscount() {
         if (this.subscriptionPlan != null) {
             return this.subscriptionPlan.getDiscount();
         }
         return 0.0;
     }
+
     public boolean hasSufficientBalance(BigDecimal amount) {
         return this.walletBalance.compareTo(amount) >= 0;
     }
+
     public void charge(BigDecimal amount) {
         if (!hasSufficientBalance(amount)) {
             throw new InsufficientBalanceException("Saldo insuficiente: impossibile addebitare " + amount + "£");
         }
         this.walletBalance = this.walletBalance.subtract(amount);
     }
+
     public void refund(BigDecimal amount) {
         this.walletBalance = this.walletBalance.add(amount);
     }

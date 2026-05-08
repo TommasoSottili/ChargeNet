@@ -18,12 +18,14 @@ public class PowerTransformer implements Subject {
     protected PowerTransformer() {
         this.observers = new ArrayList<>();
     }
+
     public PowerTransformer(String name) {
         this.name = name;
         this.temperature = 25.0;
         this.loadPercent = 0.0;
         this.observers = new ArrayList<>();
     }
+
     public void simulateTick(int activeSessionsCount) {
         double previousTemperature = this.temperature;
 
@@ -43,19 +45,23 @@ public class PowerTransformer implements Subject {
             notifyObservers(TransformerEvent.COOLING_COMPLETE);
         }
     }
+
     public void attach(Observer observer) {
         if (!observers.contains(observer)) {
             observers.add(observer);
         }
     }
+
     public void detach(Observer observer) {
         observers.remove(observer);
     }
+
     public void notifyObservers(TransformerEvent event) {
         for (Observer observer : observers) {
             observer.update(this, event);
         }
     }
+
     public Long getId() {
         return id;
     }

@@ -23,6 +23,7 @@ public class Transaction {
         this.description = null;
         this.createdAt = null;
     }
+
     private Transaction(Driver driver, TransactionType type, BigDecimal amount, Double kwh, String description) {
         this.id = null;
         this.driver = driver;
@@ -32,6 +33,7 @@ public class Transaction {
         this.description = description;
         this.createdAt = LocalDateTime.now();
     }
+
     public static Transaction create(Driver driver, TransactionType type, BigDecimal amount,
                                      Double kwh, String description) {
 
@@ -43,6 +45,7 @@ public class Transaction {
         }
         return new Transaction(driver, type, amount, kwh, description);
     }
+
     public Long getId() {
         return id;
     }

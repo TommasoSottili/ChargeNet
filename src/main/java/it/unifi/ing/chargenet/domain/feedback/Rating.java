@@ -41,6 +41,7 @@ public class Rating {
         }
         return new Rating(driver, station, session, stars, comment);
     }
+
     public Long getId() {
         return id;
     }

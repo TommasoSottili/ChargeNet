@@ -21,21 +21,25 @@ public class RatingAlert {
         this.managerNote = null;
         this.createdAt = LocalDateTime.now();
     }
+
     public static RatingAlert create(ChargingStation station, Double avgAtCreation) {
         return new RatingAlert(station, avgAtCreation);
     }
+
     public void resolveSuspend(String note) {
         if (isPending()) {
             this.status = RatingAlertStatus.RESOLVED_SUSPENDED;
             this.managerNote = note;
         }
     }
+
     public void resolveIgnore(String note) {
         if (isPending()) {
             this.status = RatingAlertStatus.RESOLVED_IGNORED;
             this.managerNote = note;
         }
     }
+
     public boolean isPending() {
         return this.status == RatingAlertStatus.PENDING;
     }

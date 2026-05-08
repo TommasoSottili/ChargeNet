@@ -57,6 +57,7 @@ public class ChargingSession {
 
         return new ChargingSession(driver, station, strategy, batteryStart);
     }
+
     public void addTick(Double kwhThisTick, BigDecimal costThisTick) {
         if (isActive()) {
             this.kwhDelivered += kwhThisTick;
@@ -76,18 +77,21 @@ public class ChargingSession {
         }
 
     }
+
     public void complete() {
         if (isActive()) {
             this.status = SessionStatus.COMPLETED;
             this.closedAt = LocalDateTime.now();
         }
     }
+
     public void interrupt() {
         if (isActive()) {
             this.status = SessionStatus.INTERRUPTED_THERMAL;
             this.closedAt = LocalDateTime.now();
         }
     }
+
     public boolean isActive() {
         return this.status == SessionStatus.ACTIVE;
     }

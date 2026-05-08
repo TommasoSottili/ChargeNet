@@ -10,14 +10,17 @@ public class StationOperator  extends User {
     protected StationOperator() {
         super();
     }
+
     public StationOperator(String name, String password, String email) {
         super(name, password, email, Role.STATION_OPERATOR);
     }
+
     public void addEarnings(BigDecimal amount) {
         if (amount != null && amount.compareTo(BigDecimal.ZERO) > 0) {
             this.totalEarnings = this.totalEarnings.add(amount);
         }
     }
+
     public BigDecimal getTotalEarnings() {
         return totalEarnings;
     }
