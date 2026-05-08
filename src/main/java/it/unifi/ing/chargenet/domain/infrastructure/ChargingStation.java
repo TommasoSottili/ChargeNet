@@ -87,7 +87,6 @@ public class ChargingStation {
     }
 
     public BigDecimal getTotalTariff() {
-        if (this.tariffOperator == null || this.tariffPlatform == null) return BigDecimal.ZERO;
         return this.tariffOperator.add(this.tariffPlatform);
     }
 
