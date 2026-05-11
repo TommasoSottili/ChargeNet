@@ -179,6 +179,7 @@ package "domain" as PKG_DOMAIN #FFFFFF {
             - observers: List<Observer>
             
             + simulateTick(totalHeatIncrement: double): void
+            + isInThermalAlert(): boolean
             + attach(o: Observer): void
             + detach(o: Observer): void
             + notifyObservers(e: TransformerEvent): void
@@ -233,7 +234,7 @@ package "domain" as PKG_DOMAIN #FFFFFF {
 
         class ChargingSession {
             - id: int
-            - strategyUsed: ChargeType
+            - strategyUsed: ChargingType
             - batteryStart: double
             - batteryCurrent: double
             - kwhDelivered: double
@@ -255,7 +256,7 @@ package "domain" as PKG_DOMAIN #FFFFFF {
             INTERRUPTED_THERMAL
         }
 
-        enum ChargeType {
+        enum ChargingType {
             FAST 
             ECO
         }
@@ -350,7 +351,7 @@ package "domain" as PKG_DOMAIN #FFFFFF {
     Driver "1" -up-> "*" ChargingSession              
     ChargingStation "1" -left-> "*" ChargingSession       : hosts >
     ChargingSession -left-> SessionStatus 
-    ChargingSession -right-> ChargeType : <<uses>>                
+    ChargingSession -right-> ChargingType : <<uses>>                
 
     ' Financials
     Driver "  1" *--> "*" Transaction                     : has >
