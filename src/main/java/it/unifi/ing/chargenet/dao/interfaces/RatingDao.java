@@ -5,6 +5,6 @@ import java.util.List;
 
 public interface RatingDao extends GenericDao<Rating> {
     // Estrae tutte le recensioni di una specifica stazione per calcolare la media
-    List<Rating> findByStation(int stationId);
+    List<Rating> findByStation(Long stationId);
 }
 
