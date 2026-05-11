@@ -99,6 +99,7 @@ package "business" as PKG_BUSINESS #FFFFFF {
             + addTick(session: ChargingSession, strategy: ChargingStrategy): void
             + closeSession(session: ChargingSession): Transaction
             + forceClose(session: ChargingSession): Transaction
+            + getActiveSessions(): List<ChargingSession>
         }
 
         class LoadBalancerService <<Observer>> {

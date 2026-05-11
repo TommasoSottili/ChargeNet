@@ -59,6 +59,10 @@ public class PowerTransformer implements Subject {
         }
     }
 
+    public boolean isInThermalAlert() {
+        return this.temperature > 90.0;
+    }
+
     public void attach(Observer observer) {
         if (!observers.contains(observer)) {
             observers.add(observer);
