@@ -10,7 +10,7 @@ public interface SessionDao extends GenericDao<ChargingSession> {
     List<ChargingSession> findActiveSessions();
 
     // Serve per sapere quali auto stanno caricando a una specifica colonnina
-    List<ChargingSession> findActiveByStation(int stationId);
+    List<ChargingSession> findActiveByStation(Long stationId);
 
     // Serve al tuo collega (Platform) per mostrare lo storico ricariche all'utente
     List<ChargingSession> findByDriver(Driver driver);
