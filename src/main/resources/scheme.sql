@@ -7,11 +7,11 @@ CREATE TABLE IF NOT EXISTS users (
     password VARCHAR(255),
     role VARCHAR(50),
     wallet_balance DECIMAL(10, 2),
-    discount DECIMAL(10, 2),
     connector_type VARCHAR(50),
     subscription_plan VARCHAR(50),
     battery_capacity DOUBLE,
-    battery_percentage DOUBLE
+    battery_percentage DOUBLE,
+    total_earnings DECIMAL(10, 2)
     );
 
 CREATE TABLE IF NOT EXISTS charging_stations (
@@ -32,7 +32,9 @@ CREATE TABLE IF NOT EXISTS charging_sessions (
     battery_current DOUBLE,
     kwh_delivered DOUBLE,
     cost_total DECIMAL(10, 2),
-    status VARCHAR(50)
+    status VARCHAR(50),
+    opened_at TIMESTAMP,
+    closed_at TIMESTAMP
     );
 
 CREATE TABLE IF NOT EXISTS transactions (
