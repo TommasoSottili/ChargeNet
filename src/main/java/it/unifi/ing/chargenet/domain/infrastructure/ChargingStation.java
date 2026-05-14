@@ -76,6 +76,43 @@ public class ChargingStation {
         return new ChargingStation(operator, transformer, name, address, lat, lng, connectorType, powerKw, isSolar, tariff);
     }
 
+    public static ChargingStation reconstitute(
+            Long id, StationOperator operator, PowerTransformer transformer, String name, String address,
+            Double latitude, Double longitude, ConnectorType connectorType, Double powerKw,
+            Boolean isSolarPowered, java.math.BigDecimal tariffOperator, java.math.BigDecimal tariffPlatform,
+            Double averageRating, Integer totalRatings, StationStatus status,
+            Driver reservedBy, java.time.LocalDateTime expirationTimestamp) {
+
+        // Crea una stazione fittizia aggirando la validazione del tuo metodo register()
+        ChargingStation station = new ChargingStation();
+
+        station.id = id;
+        station.operator = operator;
+        station.transformer = transformer;
+        station.name = name;
+        station.address = address;
+        station.latitude = latitude;
+        station.longitude = longitude;
+        station.connectorType = connectorType;
+        station.powerKw = powerKw;
+        station.isSolarPowered = isSolarPowered;
+        station.tariffOperator = tariffOperator;
+        station.tariffPlatform = tariffPlatform;
+        station.averageRating = averageRating;
+        station.totalRatings = totalRatings;
+        station.status = status;
+        station.expirationTimeStamp = expirationTimestamp;
+        station.reservedBy = reservedBy;
+
+        return station;
+    }
+
+    public static ChargingStation reconstitute(Long id) {
+        ChargingStation s = new ChargingStation();
+        s.id = id;
+        return s;
+    }
+
     public boolean isAvailableFor(ConnectorType type) {
         return this.status == StationStatus.ACTIVE && this.connectorType == type;
     }

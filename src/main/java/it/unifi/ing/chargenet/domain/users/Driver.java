@@ -8,7 +8,6 @@ public class Driver extends User {
     private Double longitude;
     private SubscriptionPlan subscriptionPlan;
     private BigDecimal walletBalance;
-    private Double batteryPercentage;
     private Double batteryCapacity;
     private ConnectorType connectorType;
 
@@ -24,7 +23,12 @@ public class Driver extends User {
         this.subscriptionPlan = subscriptionPlan;
         this.batteryCapacity = batteryCapacity;
         this.walletBalance = BigDecimal.ZERO;
-        this.batteryPercentage = null;
+    }
+
+    public static Driver reconstitute(Long id) {
+        Driver d = new Driver();
+        d.setId(id);
+        return d;
     }
 
     public Double getLatitude() {
@@ -50,12 +54,6 @@ public class Driver extends User {
     }
     public Double getBatteryCapacity() { return batteryCapacity; }
     public void setBatteryCapacity(Double batteryCapacity) { this.batteryCapacity = batteryCapacity; }
-    public Double getBatteryPercentage() {
-        return batteryPercentage;
-    }
-    public void setBatteryPercentage(Double batteryPercentage) {
-        this.batteryPercentage = batteryPercentage;
-    }
     public ConnectorType getConnectorType() {
         return connectorType;
     }
