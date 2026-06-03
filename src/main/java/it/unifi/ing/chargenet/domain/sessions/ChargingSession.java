@@ -58,6 +58,26 @@ public class ChargingSession {
         return new ChargingSession(driver, station, strategy, batteryStart);
     }
 
+    public static ChargingSession reconstitute(Long id, Driver driver, ChargingStation station,
+                                                String strategyUsed, Double batteryStart,
+                                                Double batteryCurrent, Double kwhDelivered,
+                                                BigDecimal costTotal, SessionStatus status,
+                                                LocalDateTime openedAt, LocalDateTime closedAt) {
+        ChargingSession session = new ChargingSession(); // Usa il costruttore protected dall'interno!
+        session.id = id;
+        session.driver = driver;
+        session.station = station;
+        session.strategyUsed = strategyUsed;
+        session.batteryStart = batteryStart;
+        session.batteryCurrent = batteryCurrent;
+        session.kwhDelivered = kwhDelivered;
+        session.costTotal = costTotal;
+        session.status = status;
+        session.openedAt = openedAt;
+        session.closedAt = closedAt;
+        return session;
+    }
+
     public void addTick(Double kwhThisTick, BigDecimal costThisTick) {
         if (isActive()) {
             this.kwhDelivered += kwhThisTick;

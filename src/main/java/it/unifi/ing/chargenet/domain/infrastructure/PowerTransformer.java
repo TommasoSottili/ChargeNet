@@ -29,6 +29,20 @@ public class PowerTransformer implements Subject {
         this.observers = new ArrayList<>();
     }
 
+    public static PowerTransformer reconstitute(Long id, String name, double temperature, double loadPercent) {
+        PowerTransformer transformer = new PowerTransformer(name); // Usa il tuo costruttore
+        transformer.id = id;                                       // Forza l'ID del DB
+        transformer.temperature = temperature;                     // Sovrascrive i 25.0 iniziali
+        transformer.loadPercent = loadPercent;                     // Sovrascrive lo 0.0 iniziale
+        return transformer;
+    }
+
+    public static PowerTransformer reconstitute(Long id) {
+        PowerTransformer transformer = new PowerTransformer("Proxy_Transformer");
+        transformer.id = id;
+        return transformer;
+    }
+
     public void simulateTick(double totalHeatIncrement) {
         double previousTemperature = this.temperature;
 
