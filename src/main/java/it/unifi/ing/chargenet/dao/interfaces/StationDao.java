@@ -13,4 +13,5 @@ public interface StationDao extends GenericDao<ChargingStation> {
     List<ChargingStation> findByTransformer(Long transformerId);
     void expireHolds();
     List<ChargingStation> findActive();
+    List<ChargingStation> findAll();
 }
