@@ -1,26 +1,33 @@
 package it.unifi.ing.chargenet.business.services;
 
-import it.unifi.ing.chargenet.domain.infrastructure.StationStatus;
-import it.unifi.ing.chargenet.domain.observer.Observer;
-import it.unifi.ing.chargenet.domain.observer.Subject;
-import it.unifi.ing.chargenet.domain.observer.TransformerEvent;
 import it.unifi.ing.chargenet.domain.infrastructure.PowerTransformer;
 import it.unifi.ing.chargenet.domain.infrastructure.ChargingStation;
 import it.unifi.ing.chargenet.domain.sessions.ChargingSession;
 import it.unifi.ing.chargenet.domain.infrastructure.StationStatus;
-import it.unifi.ing.chargenet.dao.interfaces.StationDao;
+import it.unifi.ing.chargenet.domain.observer.Observer;
+import it.unifi.ing.chargenet.domain.observer.Subject;
+import it.unifi.ing.chargenet.domain.observer.TransformerEvent;
 import it.unifi.ing.chargenet.business.core.GridCluster;
 
+import it.unifi.ing.chargenet.dao.postgres.DatabaseManager;
+import it.unifi.ing.chargenet.dao.interfaces.DaoFactory;
+import it.unifi.ing.chargenet.dao.interfaces.StationDao;
+
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.List;
 
 public class LoadBalancerService implements Observer {
 
     private final SessionService sessionService;
-    private final StationDao stationDao; // Aggiunto per soddisfare le nuove specifiche
+    private final DatabaseManager dbManager;
+    private final DaoFactory daoFactory;
 
-    public LoadBalancerService(SessionService sessionService, StationDao stationDao) {
+    // Sostituiamo StationDao con l'infrastruttura transazionale
+    public LoadBalancerService(SessionService sessionService, DatabaseManager dbManager, DaoFactory daoFactory) {
         this.sessionService = sessionService;
-        this.stationDao = stationDao;
+        this.dbManager = dbManager;
+        this.daoFactory = daoFactory;
     }
 
     @Override
@@ -41,50 +48,80 @@ public class LoadBalancerService implements Observer {
         }
     }
 
-    /**
-     * Recupera le colonnine del trasformatore in fiamme, le blocca in stato OVERLOADED
-     * e forza la chiusura di tutte le sessioni attive su di esse delegando al SessionService.
-     */
     private void handleThermalAlert(PowerTransformer transformer) {
         System.out.println("🚨 [LOAD BALANCER] THERMAL ALERT: Trasformatore " + transformer.getName());
-
-        // 1. Recupera tutte le colonnine associate a questo trasformatore
         List<ChargingStation> stations = GridCluster.getInstance().getStationsForTransformer(transformer.getId());
 
-        // 2. Imposta le colonnine a OVERLOADED e aggiorna il DB
-        for (ChargingStation station : stations) {
-            station.setOverloaded();
-            stationDao.update(station);
+        // FASE 1: Aggiornamento atomico di tutte le colonnine
+        Connection connection = null;
+        try {
+            connection = dbManager.getConnection();
+            connection.setAutoCommit(false);
+            StationDao stationDao = daoFactory.createStationDao(connection);
+
+            for (ChargingStation station : stations) {
+                station.setOverloaded();
+                stationDao.update(station);
+            }
+            connection.commit();
+        } catch (Exception e) {
+            rollbackQuietly(connection);
+            System.err.println("Errore nell'aggiornamento delle colonnine durante l'alert termico!");
+        } finally {
+            closeQuietly(connection); // Chiudiamo la connessione PRIMA di chiamare il SessionService
         }
 
-        // 3. Per ogni sessione ACTIVE su quelle colonnine, delega a sessionService.forceClose()
+        // FASE 2: Chiusura delle sessioni
+        // Il sessionService gestirà le sue connessioni in totale autonomia per ogni forceClose!
         List<ChargingSession> activeSessions = sessionService.getActiveSessions();
         for (ChargingSession session : activeSessions) {
             ChargingStation sessionStation = session.getStation();
 
-            // Se la colonnina della sessione fa parte di quelle bloccate dal trasformatore
-            if (sessionStation != null && stations.contains(sessionStation)) {
-                // Il forceClose gestisce in autonomia rimborso, wallet e persistenza Transaction
+            // Usiamo l'ID per confrontarle, in modo da evitare problemi di instanze diverse in memoria
+            boolean belongsToTransformer = stations.stream()
+                    .anyMatch(s -> s.getId().equals(sessionStation.getId()));
+
+            if (belongsToTransformer) {
                 sessionService.forceClose(session);
             }
         }
     }
 
-    /**
-     * Recupera le colonnine del trasformatore ormai raffreddato e le riapre alla ricarica.
-     */
     private void handleCoolingComplete(PowerTransformer transformer) {
         System.out.println("✅ [LOAD BALANCER] COOLING COMPLETE: Trasformatore " + transformer.getName());
-
-        // 1. Recupera le colonnine dello stesso trasformatore
         List<ChargingStation> stations = GridCluster.getInstance().getStationsForTransformer(transformer.getId());
 
-        // 2. Per ciascuna in stato OVERLOADED chiama station.setActive() e aggiorna il DB
-        for (ChargingStation station : stations) {
-            if (station.getStatus() == StationStatus.OVERLOADED) {
-                station.setActive(); // Chiama il metodo specifico dell'entità come da requisiti
-                stationDao.update(station);
+        Connection connection = null;
+        try {
+            connection = dbManager.getConnection();
+            connection.setAutoCommit(false);
+            StationDao stationDao = daoFactory.createStationDao(connection);
+
+            for (ChargingStation station : stations) {
+                if (station.getStatus() == StationStatus.OVERLOADED) {
+                    station.setActive();
+                    stationDao.update(station);
+                }
             }
+            connection.commit();
+        } catch (Exception e) {
+            rollbackQuietly(connection);
+            System.err.println("Errore nel ripristino delle colonnine dopo il raffreddamento!");
+        } finally {
+            closeQuietly(connection);
+        }
+    }
+
+    // --- Metodi Utility ---
+    private void rollbackQuietly(Connection connection) {
+        if (connection != null) {
+            try { connection.rollback(); } catch (SQLException ex) { /* log */ }
+        }
+    }
+
+    private void closeQuietly(Connection connection) {
+        if (connection != null) {
+            try { connection.close(); } catch (SQLException ex) { /* log */ }
         }
     }
 }
