@@ -8,157 +8,177 @@ import it.unifi.ing.chargenet.domain.users.Driver;
 import it.unifi.ing.chargenet.domain.financials.Transaction;
 import it.unifi.ing.chargenet.domain.financials.TransactionType;
 import it.unifi.ing.chargenet.domain.infrastructure.StationStatus;
+import it.unifi.ing.chargenet.dao.postgres.DatabaseManager;
+
+// IMPORTIAMO SOLO LE INTERFACCE! (Purezza Architetturale)
+import it.unifi.ing.chargenet.dao.interfaces.DaoFactory;
 import it.unifi.ing.chargenet.dao.interfaces.SessionDao;
-import it.unifi.ing.chargenet.dao.interfaces.TransactionDao;
 import it.unifi.ing.chargenet.dao.interfaces.StationDao;
+import it.unifi.ing.chargenet.dao.interfaces.TransactionDao;
 import it.unifi.ing.chargenet.dao.interfaces.UserDao;
 
 import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.List;
 
 public class SessionService {
 
-    // Dipendenze DAO (Dependency Injection tramite Costruttore)
-    private final SessionDao sessionDao;
-    private final TransactionDao transactionDao;
-    private final StationDao stationDao;
-    private final UserDao userDao;
+    private final DatabaseManager dbManager;
+    private final DaoFactory daoFactory;
 
-    public SessionService(SessionDao sessionDao, TransactionDao transactionDao, StationDao stationDao, UserDao userDao) {
-        this.sessionDao = sessionDao;
-        this.transactionDao = transactionDao;
-        this.stationDao = stationDao;
-        this.userDao = userDao;
+    public SessionService(DatabaseManager dbManager, DaoFactory daoFactory) {
+        this.dbManager = dbManager;
+        this.daoFactory = daoFactory;
     }
 
     /**
      * Apre una nuova sessione verificando i fondi del guidatore.
      */
     public ChargingSession openSession(Driver driver, ChargingStation station, ChargingStrategy strategy, double batteryStart) {
-        // 1. Verifica saldo per almeno 5 kWh (Requisito di Business)
+        // 1. Regola di Business: verifica saldo per almeno 5 kWh
         double minRequiredCost = strategy.calculateCost(5.0, station, driver);
-        BigDecimal minCostBD = BigDecimal.valueOf(minRequiredCost);
-        if (driver.getWalletBalance().compareTo(minCostBD) < 0) {
+        if (driver.getWalletBalance().compareTo(BigDecimal.valueOf(minRequiredCost)) < 0) {
             throw new IllegalStateException("Saldo insufficiente: sono necessari fondi per almeno 5 kWh.");
         }
 
-        // 2. Delega la creazione al Factory Method
+        // 2. Factory Method per Sessione
         ChargingSession session = ChargingSession.open(driver, station, strategy.getName(), batteryStart);
-
-        // 3. Imposta la colonnina a BUSY
         station.setBusy();
 
-        // 4. Persistenza
-        sessionDao.save(session);
-        stationDao.update(station);
+        // 3. Persistenza Atomica
+        Connection connection = null;
+        try {
+            connection = dbManager.getConnection();
+            connection.setAutoCommit(false); // INIZIO TRANSAZIONE
 
-        return session;
+            SessionDao sessionDao = daoFactory.createSessionDao(connection);
+            StationDao stationDao = daoFactory.createStationDao(connection);
+
+            sessionDao.save(session);
+            stationDao.update(station);
+
+            connection.commit(); // FINE TRANSAZIONE
+            return session;
+
+        } catch (Exception e) {
+            rollbackQuietly(connection);
+            throw new RuntimeException("Impossibile aprire la sessione a causa di un errore nel database.", e);
+        } finally {
+            closeQuietly(connection);
+        }
     }
 
     /**
      * Chiamato dal GridMonitor ogni 5 secondi per far avanzare la ricarica ed erodere il portafoglio.
      */
     public void addTick(ChargingSession session, ChargingStrategy strategy) {
-
-        // 1. Calcolo fisico: Quanta energia è stata erogata in 5 secondi?
-        double oreTick = 5.0 / 3600.0; // 5 secondi convertiti in ore
-        // Presupponiamo che station abbia un metodo per conoscere la potenza in kW
+        // 1. Calcolo fisico ed economico
+        double oreTick = 5.0 / 3600.0;
         double kwhThisTick = session.getStation().getPowerKw() * oreTick;
-
-        // 2. Calcolo economico: Quanto costa questa energia?
         double costDouble = strategy.calculateCost(kwhThisTick, session.getStation(), session.getDriver());
         BigDecimal costThisTick = BigDecimal.valueOf(costDouble);
 
-        // 3. Passiamo i dati alla sessione usando il metodo del tuo collega
         session.addTick(kwhThisTick, costThisTick);
 
-        // 4. Scaliamo i soldi dal portafoglio del Driver
         Driver driver = session.getDriver();
         driver.charge(costThisTick);
 
-        // 5. Salviamo i progressi nel Database
-        userDao.update(driver);
-        sessionDao.update(session);
+        // 2. Salvataggio del tick nel Database
+        Connection connection = null;
+        try {
+            connection = dbManager.getConnection();
+            connection.setAutoCommit(false);
 
-        // --- CONTROLLI DI BUSINESS FINALI ---
+            UserDao userDao = daoFactory.createUserDao(connection);
+            SessionDao sessionDao = daoFactory.createSessionDao(connection);
 
-        // A. Controllo anti-debito: se i soldi finiscono, stacca la corrente e rimborsa il rimanente
-        if (driver.getWalletBalance().compareTo(BigDecimal.ZERO) <= 0) {
-            forceClose(session);
-            return; // Usciamo dal metodo, la sessione è forzatamente chiusa
+            userDao.update(driver);
+            sessionDao.update(session);
+
+            connection.commit();
+        } catch (Exception e) {
+            rollbackQuietly(connection);
+            throw new RuntimeException("Errore durante il salvataggio del tick di ricarica", e);
+        } finally {
+            // È vitale chiudere la connessione qui, PRIMA dei check successivi
+            closeQuietly(connection);
         }
 
-        // B. Controllo auto-completamento (Logica del collega)
-        // Se il metodo del collega ha visto che la batteria è al 100%, avrà cambiato lo stato
-        // della sessione (presumibilmente togliendolo da ACTIVE). In tal caso dobbiamo
-        // liberare la colonnina e generare la transazione.
-        if (session.getStatus() != SessionStatus.ACTIVE) {
+        // --- CONTROLLI DI BUSINESS FINALI ---
+        // A. Controllo anti-debito
+        if (driver.getWalletBalance().compareTo(BigDecimal.ZERO) <= 0) {
+            forceClose(session);
+        }
+        // B. Controllo completamento 100%
+        else if (session.getStatus() != SessionStatus.ACTIVE) {
             closeSession(session);
         }
     }
 
     /**
-     * Chiusura volontaria da parte dell'utente (Happy Path - UC7).
+     * Chiusura volontaria da parte dell'utente (Happy Path).
      */
     public Transaction closeSession(ChargingSession session) {
-        // 1. Finalizza lo stato della sessione (es. set endTime)
         session.complete();
 
-        // 2. Libera la colonnina
         ChargingStation station = session.getStation();
         station.setActive();
 
-        // 3. Genera la ricevuta/transazione (CHARGE)
         BigDecimal totalCost = session.getCostTotal();
         Double totalKwhDelivered = session.getKwhDelivered();
         String description = "Addebito pari a: " + totalCost + " per ricarica completata";
         Transaction transaction = Transaction.create(session.getDriver(), TransactionType.CHARGE, totalCost, totalKwhDelivered, description);
 
-        // 4. Aggiorna i guadagni dell'operatore (es. versando i soldi nel suo conto)
-        // (Nota: assumo che la logica di accredito all'operatore venga gestita qui o tramite un altro metodo/service)
+        Connection connection = null;
+        try {
+            connection = dbManager.getConnection();
+            connection.setAutoCommit(false);
 
-        // 5. Salva tutto nel DB
-        transactionDao.save(transaction);
-        stationDao.update(station);
-        sessionDao.update(session);
+            TransactionDao transactionDao = daoFactory.createTransactionDao(connection);
+            StationDao stationDao = daoFactory.createStationDao(connection);
+            SessionDao sessionDao = daoFactory.createSessionDao(connection);
 
-        return transaction;
+            transactionDao.save(transaction);
+            stationDao.update(station);
+            sessionDao.update(session);
+
+            connection.commit();
+            return transaction;
+        } catch (Exception e) {
+            rollbackQuietly(connection);
+            throw new RuntimeException("Errore durante la chiusura della sessione", e);
+        } finally {
+            closeQuietly(connection);
+        }
     }
 
     /**
      * Chiusura forzata dal sistema (es. emergenza termica, spegnimento per portafoglio vuoto).
      */
     public Transaction forceClose(ChargingSession session) {
-        // 1. Interruzione formale
         session.interrupt();
 
         ChargingStation station = session.getStation();
         if (station.getStatus() != StationStatus.OVERLOADED) {
-            station.setActive();;
+            station.setActive();
         }
 
-        // 2. CALCOLO DEL RIMBORSO (Tua logica: Rimborso dell'ultimo tick)
-        // Recuperiamo quanto è stato erogato in 5 secondi (stessa logica di addTick)
+        // Calcolo dell'ultimo tick per il rimborso
         double oreTick = 5.0 / 3600.0;
         double kwhLastTick = station.getPowerKw() * oreTick;
 
-        // Recuperiamo la strategia usata (tramite la nostra factory/metodo)
+        // Recuperiamo la strategia dinamicamente dal nome salvato nella sessione
         ChargingStrategy strategy = ChargingStrategy.fromString(session.getStrategyUsed());
-
-        // Calcoliamo il costo di quel singolo tick
         double costLastTickDouble = strategy.calculateCost(kwhLastTick, station, session.getDriver());
         BigDecimal refundAmount = BigDecimal.valueOf(costLastTickDouble);
-        String refundDescription = "Rimborso pari a: " + refundAmount.toPlainString() + " a causa di interruzione tecnica";
 
-
-        // 3. LOGICA DI APPLICAZIONE
-        // Se il wallet è vuoto, il blocco è dovuto al cliente -> Rimborso 0
-        // Se il wallet ha ancora soldi, il blocco è per Thermal Alert -> Applichiamo il rimborso
+        // Se il wallet è vuoto, è colpa dell'utente, niente rimborso.
         if (session.getDriver().getWalletBalance().compareTo(BigDecimal.ZERO) <= 0) {
             refundAmount = BigDecimal.ZERO;
         }
 
-        // 4. Generazione Transazione e Accredito
+        String refundDescription = "Rimborso pari a: " + refundAmount.toPlainString() + " a causa di interruzione tecnica";
         Transaction transaction = Transaction.create(session.getDriver(), TransactionType.REFUND, refundAmount, kwhLastTick, refundDescription);
 
         Driver driver = session.getDriver();
@@ -166,19 +186,63 @@ public class SessionService {
             driver.refund(refundAmount);
         }
 
-        // 5. Persistenza atomica
-        transactionDao.save(transaction);
-        userDao.update(driver);
-        stationDao.update(station);
-        sessionDao.update(session);
+        Connection connection = null;
+        try {
+            connection = dbManager.getConnection();
+            connection.setAutoCommit(false);
 
-        return transaction;
+            TransactionDao transactionDao = daoFactory.createTransactionDao(connection);
+            UserDao userDao = daoFactory.createUserDao(connection);
+            StationDao stationDao = daoFactory.createStationDao(connection);
+            SessionDao sessionDao = daoFactory.createSessionDao(connection);
+
+            transactionDao.save(transaction);
+            userDao.update(driver);
+            stationDao.update(station);
+            sessionDao.update(session);
+
+            connection.commit();
+            return transaction;
+        } catch (Exception e) {
+            rollbackQuietly(connection);
+            throw new RuntimeException("Errore durante la chiusura forzata della sessione", e);
+        } finally {
+            closeQuietly(connection);
+        }
     }
 
     /**
-     * Recupera le sessioni attualmente in corso per il GridMonitor.
+     * Recupera le sessioni attualmente in corso.
+     * Essendo in sola lettura, usiamo il "try-with-resources" per chiudere la connessione in automatico.
      */
     public List<ChargingSession> getActiveSessions() {
-        return sessionDao.findActiveSessions();
+        try (Connection connection = dbManager.getConnection()) {
+            SessionDao sessionDao = daoFactory.createSessionDao(connection);
+            return sessionDao.findActiveSessions();
+        } catch (SQLException e) {
+            throw new RuntimeException("Errore durante il recupero delle sessioni attive", e);
+        }
+    }
+
+    // --- Metodi di Utility per la gestione sicura delle connessioni ---
+
+    private void rollbackQuietly(Connection connection) {
+        if (connection != null) {
+            try {
+                connection.rollback();
+            } catch (SQLException ex) {
+                System.err.println("Errore critico durante il rollback: " + ex.getMessage());
+            }
+        }
+    }
+
+    private void closeQuietly(Connection connection) {
+        if (connection != null) {
+            try {
+                connection.close();
+            } catch (SQLException ex) {
+                System.err.println("Errore durante la chiusura della connessione: " + ex.getMessage());
+            }
+        }
     }
 }
