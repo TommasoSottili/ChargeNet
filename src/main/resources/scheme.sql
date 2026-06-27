@@ -92,16 +92,16 @@ CONSTRAINT fk_rating_session FOREIGN KEY (session_id) REFERENCES charging_sessio
 CONSTRAINT uq_driver_session UNIQUE (driver_id, session_id)
 );
 
--- CREATE TABLE rating_alerts (
--- id BIGSERIAL PRIMARY KEY,
--- station_id BIGINT NOT NULL,
--- avg_at_creation DOUBLE PRECISION NOT NULL,
--- status VARCHAR(50) NOT NULL,
--- manager_note TEXT,
--- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
--- CONSTRAINT fk_alert_station FOREIGN KEY (station_id) REFERENCES charging_stations(id)
--- );
---
+ CREATE TABLE rating_alerts (
+ id BIGSERIAL PRIMARY KEY,
+ station_id BIGINT NOT NULL,
+ avg_at_creation DOUBLE PRECISION NOT NULL,
+ status VARCHAR(50) NOT NULL,
+ manager_note TEXT,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ CONSTRAINT fk_alert_station FOREIGN KEY (station_id) REFERENCES charging_stations(id)
+ );
+
 -- CREATE TABLE IF NOT EXISTS users (
 --     id BIGINT AUTO_INCREMENT PRIMARY KEY,
 --     name VARCHAR(100)

@@ -14,4 +14,5 @@ public interface StationDao extends GenericDao<ChargingStation> {
     void expireHolds();
     List<ChargingStation> findActive();
     List<ChargingStation> findAll();
+    boolean acquireAtomicHold(Long stationId, Long driverId);
 }

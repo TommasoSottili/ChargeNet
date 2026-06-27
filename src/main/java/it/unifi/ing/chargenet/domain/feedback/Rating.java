@@ -7,13 +7,13 @@ import java.time.LocalDateTime;
 
 public class Rating {
 
-    private final Long id;
-    private final Driver driver;
-    private final ChargingStation station;
-    private final ChargingSession session;
-    private final Integer stars;
-    private final String comment;
-    private final LocalDateTime createdAt;
+    private Long id;
+    private Driver driver;
+    private ChargingStation station;
+    private ChargingSession session;
+    private Integer stars;
+    private String comment;
+    private LocalDateTime createdAt;
 
     protected Rating() {
         this.id = null;
@@ -40,6 +40,23 @@ public class Rating {
             throw new InvalidRatingException("Errore di validazione: il rating deve essere un valore intero compreso tra 1 e 5 stelle.");
         }
         return new Rating(driver, station, session, stars, comment);
+    }
+
+    // Metodo per ricostruire un Rating dal Database aggirando le validazioni di "leave"
+    public static Rating reconstitute(Long id, Driver driver, ChargingStation station,
+                                      ChargingSession session, Integer stars,
+                                      String comment, LocalDateTime createdAt) {
+        Rating rating = new Rating(); // Usa il costruttore protected vuoto
+
+        rating.id = id;
+        rating.driver = driver;
+        rating.station = station;
+        rating.session = session;
+        rating.stars = stars;
+        rating.comment = comment;
+        rating.createdAt = createdAt;
+
+        return rating;
     }
 
     public Long getId() {
@@ -69,4 +86,6 @@ public class Rating {
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
+
+    public void setId(Long id) { this.id = id; }
 }
