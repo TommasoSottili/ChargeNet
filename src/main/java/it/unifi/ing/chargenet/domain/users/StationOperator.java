@@ -14,7 +14,7 @@ public class StationOperator  extends User {
     }
 
     public StationOperator(String name, String password, String email) {
-        super(name, password, email, Role.STATION_OPERATOR);
+        super(name, email, password, Role.STATION_OPERATOR);
     }
 
     public static StationOperator reconstitute(Long id) {
@@ -34,5 +34,23 @@ public class StationOperator  extends User {
     }
     public void setTotalEarnings(BigDecimal totalEarnings) {
         this.totalEarnings = totalEarnings;
+    }
+
+    // Metodo statico per ricostruire l'oggetto dal Database
+    public static StationOperator reconstitute(Long id, String name, String email, String password, BigDecimal totalEarnings) {
+
+        StationOperator operator = new StationOperator();
+
+        // Campi ereditati da User
+        operator.setId(id);
+        operator.setName(name);
+        operator.setEmail(email);
+        operator.setPassword(password);
+        operator.setRole(Role.STATION_OPERATOR);
+
+        // Campo specifico
+        operator.totalEarnings = totalEarnings;
+
+        return operator;
     }
 }

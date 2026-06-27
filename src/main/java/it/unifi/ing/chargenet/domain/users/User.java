@@ -10,10 +10,10 @@ public  abstract class User {
 
     protected User() {};
 
-    public User(String name, String password, String email, Role role) {
+    public User(String name, String email, String password, Role role) {
         this.name = name;
-        this.password = password;
         this.email = email;
+        this.password = password;
         this.role = role;
     }
 
@@ -44,8 +44,8 @@ public  abstract class User {
     public Role getRole() {
         return role;
     }
-    private  void setRole(Role role) { // scelta di protected: il ruolo di un utente viene assegnato alla sua
-        this.role = role;              // creazione e non dovrebbe poter essere modificato liberamente da
-    }                                  // qualsiasi altra classe esterna
+    public void setRole(Role role) {
+        this.role = role;
+    }
 
 }

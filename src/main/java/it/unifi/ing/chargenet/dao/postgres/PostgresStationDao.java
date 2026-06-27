@@ -278,4 +278,27 @@ public class PostgresStationDao implements StationDao {
         }
         return list;
     }
+
+    public boolean acquireAtomicHold(Long stationId, Long driverId) {
+        String sql = "UPDATE charging_stations " +
+                "SET status = 'RESERVED', reserved_by_id = ?, " +
+                "expiration_timestamp = ? " + // Messo il punto interrogativo!
+                "WHERE id = ? AND status = 'ACTIVE'";
+
+        try (java.sql.PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setLong(1, driverId);
+
+            // Calcoliamo la scadenza in Java (+15 minuti da ora)
+            java.time.LocalDateTime expiration = java.time.LocalDateTime.now().plusMinutes(15);
+            stmt.setTimestamp(2, java.sql.Timestamp.valueOf(expiration));
+
+            stmt.setLong(3, stationId);
+
+            int rowsAffected = stmt.executeUpdate();
+            return rowsAffected == 1;
+
+        } catch (java.sql.SQLException e) {
+            throw new RuntimeException("Errore durante l'acquireAtomicHold sulla stazione ID: " + stationId, e);
+        }
+    }
 }

@@ -1,8 +1,10 @@
 package it.unifi.ing.chargenet.dao.interfaces;
 
 import it.unifi.ing.chargenet.domain.financials.Transaction;
+import it.unifi.ing.chargenet.domain.financials.TransactionType;
+import java.util.List;
 
 public interface TransactionDao extends GenericDao<Transaction> {
-    // Eredita automaticamente save, update, findById, ecc. dal GenericDao.
-    // Il documento non specifica metodi extra qui.
+    List<Transaction> findByDriver (Long driverId);
+    List<Transaction> findByType (TransactionType type);
 }

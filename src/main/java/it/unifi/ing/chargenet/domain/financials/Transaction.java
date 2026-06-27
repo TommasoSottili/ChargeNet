@@ -6,13 +6,13 @@ import java.time.LocalDateTime;
 
 public class Transaction {
 
-    private final Long id;
-    private final Driver driver;
-    private final TransactionType type;
-    private final BigDecimal amount;
-    private final Double kwh;
-    private final String description;
-    private final LocalDateTime createdAt;
+    private Long id;
+    private Driver driver;
+    private TransactionType type;
+    private BigDecimal amount;
+    private Double kwh;
+    private String description;
+    private LocalDateTime createdAt;
 
     protected Transaction() {
         this.id = null;
@@ -45,10 +45,29 @@ public class Transaction {
         }
         return new Transaction(driver, type, amount, kwh, description);
     }
+    // Metodo per ricostruire una transazione dal Database senza innescare validazioni
+    public static Transaction reconstitute(Long id, Driver driver, TransactionType type,
+                                           BigDecimal amount, Double kwh,
+                                           String description, LocalDateTime createdAt) {
+        Transaction transaction = new Transaction(); // Usa il costruttore protected vuoto
+
+        // Assegniamo i valori "crudi"
+        transaction.id = id;
+        transaction.driver = driver;
+        transaction.type = type;
+        transaction.amount = amount;
+        transaction.kwh = kwh;
+        transaction.description = description;
+        transaction.createdAt = createdAt;
+
+        return transaction;
+    }
 
     public Long getId() {
         return id;
     }
+
+    public void setId(Long id) {this.id = id;}
 
     public Driver getDriver() {
         return driver;

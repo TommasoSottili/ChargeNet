@@ -306,4 +306,52 @@ class PostgresStationDaoTest {
         assertEquals(1, byTransformer.size(), "Deve trovare la stazione per il trasformatore 1");
         assertTrue(byWrongTransformer.isEmpty(), "Non deve trovare stazioni per un trasformatore inesistente");
     }
+
+    @Test
+    @DisplayName("Acquisizione atomica della stazione (Race Condition Defense)")
+    void testAcquireAtomicHold() throws SQLException {
+        // --- ARRANGE ---
+        // Svuotiamo e prepariamo il database fittizio
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute("SET REFERENTIAL_INTEGRITY FALSE");
+            stmt.execute("TRUNCATE TABLE charging_stations RESTART IDENTITY");
+            stmt.execute("TRUNCATE TABLE power_transformers RESTART IDENTITY");
+            stmt.execute("TRUNCATE TABLE users RESTART IDENTITY");
+            stmt.execute("SET REFERENTIAL_INTEGRITY TRUE");
+
+            // Inseriamo due Driver per simulare la concorrenza (ID 1 e ID 2)
+            stmt.execute("INSERT INTO users (id, name, email, password, role) VALUES (1, 'Mario Rossi', 'mario@mail.com', 'pwd', 'DRIVER')");
+            stmt.execute("INSERT INTO users (id, name, email, password, role) VALUES (2, 'Luigi Verdi', 'luigi@mail.com', 'pwd', 'DRIVER')");
+
+            // Inseriamo Operatore e Trasformatore necessari per la stazione
+            stmt.execute("INSERT INTO users (id, name, email, password, role) VALUES (3, 'Enel X', 'enel@mail.com', 'pwd', 'STATION_OPERATOR')");
+            stmt.execute("INSERT INTO power_transformers (id, name) VALUES (1, 'Trasformatore Alpha')");
+
+            // INSERIAMO LA STAZIONE IN STATO 'ACTIVE'
+            stmt.execute("INSERT INTO charging_stations (id, operator_id, transformer_id, name, address, latitude, longitude, connector_type, power_kw, tariff_operator, status) " +
+                    "VALUES (1, 3, 1, 'Stazione Test', 'Via Roma', 43.0, 11.0, 'TYPE_2', 50.0, 0.45, 'ACTIVE')");
+        }
+
+        // --- ACT 1: Il primo guidatore (ID 1) tenta di prenotare la stazione ---
+        boolean success = stationDao.acquireAtomicHold(1L, 1L);
+
+        // --- ASSERT 1: La prenotazione deve avere successo ---
+        assertTrue(success, "La prima prenotazione deve avere successo perché la stazione è ACTIVE");
+
+        // Verifichiamo direttamente sul database che lo stato sia cambiato e la scadenza impostata
+        try (Statement stmt = connection.createStatement();
+             java.sql.ResultSet rs = stmt.executeQuery("SELECT status, reserved_by_id, expiration_timestamp FROM charging_stations WHERE id = 1")) {
+            assertTrue(rs.next());
+            assertEquals("RESERVED", rs.getString("status"), "Lo stato della stazione deve essere passato a RESERVED");
+            assertEquals(1L, rs.getLong("reserved_by_id"), "La stazione deve essere riservata al Driver 1");
+            assertNotNull(rs.getTimestamp("expiration_timestamp"), "Il database deve aver calcolato e inserito la scadenza di 15 minuti");
+        }
+
+        // --- ACT 2: Il secondo guidatore (ID 2) tenta di prenotare LA STESSA stazione ---
+        boolean failedAttempt = stationDao.acquireAtomicHold(1L, 2L);
+
+        // --- ASSERT 2: Il database DEVE bloccare questa operazione ---
+        assertFalse(failedAttempt, "La seconda prenotazione DEVE fallire restituendo false, perché la stazione non è più ACTIVE");
+    }
 }
+

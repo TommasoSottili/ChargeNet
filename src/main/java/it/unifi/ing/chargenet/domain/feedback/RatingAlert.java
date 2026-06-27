@@ -40,6 +40,19 @@ public class RatingAlert {
         }
     }
 
+    // Metodo per ricostruire un RatingAlert dal Database
+    public static RatingAlert reconstitute(Long id, ChargingStation station, Double avgAtCreation,
+                                           RatingAlertStatus status, String managerNote, LocalDateTime createdAt) {
+        RatingAlert alert = new RatingAlert(); // Usa il costruttore protected vuoto
+        alert.id = id;
+        alert.station = station;
+        alert.avgAtCreation = avgAtCreation;
+        alert.status = status;
+        alert.managerNote = managerNote;
+        alert.createdAt = createdAt;
+        return alert;
+    }
+
     public boolean isPending() {
         return this.status == RatingAlertStatus.PENDING;
     }

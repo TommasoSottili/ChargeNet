@@ -16,7 +16,7 @@ public class Driver extends User {
     }
 
     public Driver(Double latitude, Double longitude, ConnectorType connectorType, SubscriptionPlan subscriptionPlan, Double batteryCapacity, String name, String email, String password) {
-        super(name, password, email, Role.DRIVER);
+        super(name, email, password, Role.DRIVER);
         this.latitude = latitude;
         this.longitude = longitude;
         this.connectorType = connectorType;
@@ -84,6 +84,34 @@ public class Driver extends User {
     }
     public void updatePlan(SubscriptionPlan newPlan) {
         this.subscriptionPlan = newPlan;
+        this.walletBalance = this.walletBalance.subtract(newPlan.getMonthlyFee()); // aggiunto questa riga durante l' implementazione del wallet service
+    }
+
+    // Metodo statico per ricostruire l'oggetto dal Database
+    public static Driver reconstitute(Long id, String name, String email, String password,
+                                      Double latitude, Double longitude, ConnectorType connectorType,
+                                      SubscriptionPlan subscriptionPlan, Double batteryCapacity,
+                                       BigDecimal walletBalance) {
+
+        // Usiamo il costruttore protected vuoto
+        Driver driver = new Driver();
+
+        // Usiamo i setter per i campi ereditati dal padre (User)
+        driver.setId(id);
+        driver.setName(name);
+        driver.setEmail(email);
+        driver.setPassword(password);
+        driver.setRole(Role.DRIVER);
+
+        // Assegniamo direttamente i campi specifici del Driver
+        driver.latitude = latitude;
+        driver.longitude = longitude;
+        driver.connectorType = connectorType;
+        driver.subscriptionPlan = subscriptionPlan;
+        driver.batteryCapacity = batteryCapacity;
+        driver.walletBalance = walletBalance;
+
+        return driver;
     }
 }
 
