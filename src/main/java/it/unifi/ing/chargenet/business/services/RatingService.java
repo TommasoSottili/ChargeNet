@@ -152,4 +152,95 @@ public class RatingService {
             }
         }
     }
+
+    public List<RatingAlert> getPendingAlerts() {
+        try (Connection connection = DatabaseManager.getConnection()) {
+            RatingAlertDao alertDao = daoFactory.createRatingAlertDao(connection);
+
+            // Usiamo l'Enum corretto che mi hai mostrato nello screenshot
+            return alertDao.findByStatus(it.unifi.ing.chargenet.domain.feedback.RatingAlertStatus.PENDING);
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Errore durante il recupero degli alert in sospeso", e);
+        }
+    }
+
+    public void suspendStationFromAlert(RatingAlert alert, String notes) {
+        Connection connection = null;
+        try {
+            connection = DatabaseManager.getConnection();
+            connection.setAutoCommit(false); // Inizio transazione
+
+            RatingAlertDao alertDao = daoFactory.createRatingAlertDao(connection);
+            StationDao stationDao = daoFactory.createStationDao(connection);
+
+            // 1. LOGICA DI DOMINIO
+            // NOTA: Assicurati che alert.resolve() e station.suspend() esistano nelle tue classi!
+            alert.resolveSuspend(notes);
+
+            ChargingStation station = alert.getStation();
+            station.setSuspended();
+
+            // 2. PERSISTENZA: Aggiorniamo entrambe le entità
+            alertDao.update(alert);
+            stationDao.update(station);
+
+            // 3. COMMIT: Confermiamo tutto insieme
+            connection.commit();
+            System.out.println("[RatingService] Stazione '" + station.getName() + "' sospesa. Alert ID: " + alert.getId());
+
+        } catch (Exception e) {
+            rollbackQuietly(connection);
+            throw new RuntimeException("Errore critico durante la sospensione della stazione: " + e.getMessage(), e);
+        } finally {
+            closeQuietly(connection);
+        }
+    }
+
+    public void dismissAlert(RatingAlert alert, String notes) {
+        Connection connection = null;
+        try {
+            connection = DatabaseManager.getConnection();
+            connection.setAutoCommit(false); // Inizio transazione
+
+            RatingAlertDao alertDao = daoFactory.createRatingAlertDao(connection);
+
+            // 1. LOGICA DI DOMINIO: Usiamo il TUO fantastico metodo resolveIgnore
+            alert.resolveIgnore(notes);
+
+            // 2. PERSISTENZA: Aggiorniamo solo l'alert, la stazione rimane attiva
+            alertDao.update(alert);
+
+            // 3. COMMIT
+            connection.commit();
+            System.out.println("[RatingService] Alert ID: " + alert.getId() + " ignorato con successo (Falso allarme).");
+
+        } catch (Exception e) {
+            rollbackQuietly(connection);
+            throw new RuntimeException("Errore critico durante la chiusura dell'alert: " + e.getMessage(), e);
+        } finally {
+            closeQuietly(connection);
+        }
+    }
+
+    private void rollbackQuietly(Connection connection) {
+        if (connection != null) {
+            try {
+                connection.rollback();
+            } catch (SQLException ex) {
+                /* Log silenzioso */
+            }
+        }
+    }
+
+    private void closeQuietly(Connection connection) {
+        if (connection != null) {
+            try {
+                connection.setAutoCommit(true);
+                connection.close();
+            } catch (SQLException ex) {
+                /* Log silenzioso */
+            }
+        }
+    }
 }

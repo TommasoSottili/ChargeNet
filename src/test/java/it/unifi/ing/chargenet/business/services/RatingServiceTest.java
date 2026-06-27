@@ -9,6 +9,7 @@ import it.unifi.ing.chargenet.domain.feedback.Rating;
 import it.unifi.ing.chargenet.domain.infrastructure.ChargingStation;
 import it.unifi.ing.chargenet.domain.sessions.ChargingSession;
 import it.unifi.ing.chargenet.domain.users.Driver;
+import it.unifi.ing.chargenet.domain.feedback.RatingAlert;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -17,7 +18,7 @@ import org.mockito.MockedStatic;
 
 import java.sql.Connection;
 import java.sql.SQLException;
-
+import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -231,6 +232,104 @@ class RatingServiceTest {
         verify(ratingAlertDaoMock, times(1)).save(any());
 
         verify(connectionMock, times(1)).commit(); // Tutto salvato in blocco
+        verify(connectionMock, times(1)).close();
+    }
+
+    @Test
+    @DisplayName("Recupero degli Alert in sospeso con successo")
+    void testGetPendingAlerts_Success() throws SQLException {
+        // --- ARRANGE ---
+        // 1. Creiamo un Mock del DAO specifico per gli Alert
+        RatingAlertDao mockAlertDao = mock(RatingAlertDao.class);
+
+        // 2. Diciamo al nostro DaoFactory finto di restituire il mockAlertDao quando richiesto
+        when(daoFactoryMock.createRatingAlertDao(any(Connection.class))).thenReturn(mockAlertDao);
+
+        // 3. Prepariamo una lista finta di alert (ne basta uno per testare)
+        RatingAlert fakeAlert = mock(RatingAlert.class);
+        List<RatingAlert> expectedAlerts = java.util.Collections.singletonList(fakeAlert);
+
+        // 4. Istruiamo il mockAlertDao a restituire la nostra lista finta
+        // quando gli viene chiesto di cercare gli alert PENDING
+        when(mockAlertDao.findByStatus(it.unifi.ing.chargenet.domain.feedback.RatingAlertStatus.PENDING))
+                .thenReturn(expectedAlerts);
+
+        // --- ACT ---
+        List<RatingAlert> result = ratingService.getPendingAlerts();
+
+        // --- ASSERT ---
+        // 1. Verifichiamo che il risultato sia esattamente quello che ci aspettavamo
+        assertNotNull(result, "La lista degli alert non deve essere null");
+        assertEquals(1, result.size(), "La lista deve contenere un elemento");
+        assertEquals(fakeAlert, result.get(0), "L'elemento deve essere il nostro mock");
+
+        // 2. Verifichiamo che la connessione sia stata gestita correttamente
+        // (essendo un try-with-resources, deve essere stata chiusa alla fine)
+        verify(connectionMock, times(1)).close();
+    }
+
+    @Test
+    @DisplayName("Sospensione stazione da Alert con successo")
+    void testSuspendStationFromAlert_Success() throws SQLException {
+        // --- ARRANGE ---
+        RatingAlert mockAlert = mock(RatingAlert.class);
+        ChargingStation mockStation = mock(ChargingStation.class);
+
+        // Colleghiamo l'alert alla stazione finta
+        when(mockAlert.getStation()).thenReturn(mockStation);
+        when(mockAlert.getId()).thenReturn(99L);
+        when(mockStation.getName()).thenReturn("Colonnina Difettosa");
+
+        // Prepariamo i DAO finti
+        RatingAlertDao mockAlertDao = mock(RatingAlertDao.class);
+        StationDao mockStationDao = mock(StationDao.class);
+
+        // Istruiamo la Factory
+        when(daoFactoryMock.createRatingAlertDao(any(Connection.class))).thenReturn(mockAlertDao);
+        when(daoFactoryMock.createStationDao(any(Connection.class))).thenReturn(mockStationDao);
+
+        String managerNotes = "Danni fisici confermati. Sospensione immediata.";
+
+        // --- ACT ---
+        ratingService.suspendStationFromAlert(mockAlert, managerNotes);
+
+        // --- ASSERT ---
+        // 1. Verifichiamo la Logica di Dominio (USANDO IL TUO METODO resolveSuspend)
+        verify(mockAlert, times(1)).resolveSuspend(managerNotes);
+        verify(mockStation, times(1)).setSuspended();
+
+        // 2. Verifichiamo il Database e le Transazioni
+        verify(connectionMock, times(1)).setAutoCommit(false); // Transazione aperta?
+        verify(mockAlertDao, times(1)).update(mockAlert);      // Alert aggiornato?
+        verify(mockStationDao, times(1)).update(mockStation);  // Stazione aggiornata?
+        verify(connectionMock, times(1)).commit();             // Tutto salvato?
+        verify(connectionMock, times(1)).close();              // Connessione chiusa?
+    }
+
+    @Test
+    @DisplayName("Chiusura Alert ignorato (Falso Allarme) con successo")
+    void testDismissAlert_Success() throws SQLException {
+        // --- ARRANGE ---
+        RatingAlert mockAlert = mock(RatingAlert.class);
+        when(mockAlert.getId()).thenReturn(42L);
+
+        // Prepariamo il DAO finto per gli alert
+        RatingAlertDao mockAlertDao = mock(RatingAlertDao.class);
+        when(daoFactoryMock.createRatingAlertDao(any(Connection.class))).thenReturn(mockAlertDao);
+
+        String managerNotes = "Verificato. Recensioni anomale fatte da bot. Falso allarme.";
+
+        // --- ACT ---
+        ratingService.dismissAlert(mockAlert, managerNotes);
+
+        // --- ASSERT ---
+        // 1. Verifichiamo la Logica di Dominio
+        verify(mockAlert, times(1)).resolveIgnore(managerNotes);
+
+        // 2. Verifichiamo il Database e le Transazioni
+        verify(connectionMock, times(1)).setAutoCommit(false);
+        verify(mockAlertDao, times(1)).update(mockAlert); // Solo l'alert viene aggiornato
+        verify(connectionMock, times(1)).commit();
         verify(connectionMock, times(1)).close();
     }
 }
