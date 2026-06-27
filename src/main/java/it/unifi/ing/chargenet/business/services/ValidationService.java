@@ -5,6 +5,7 @@ import it.unifi.ing.chargenet.dao.interfaces.StationDao;
 import it.unifi.ing.chargenet.dao.postgres.DatabaseManager;
 import it.unifi.ing.chargenet.domain.infrastructure.ChargingStation;
 
+import java.util.List;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.math.BigDecimal;
@@ -97,6 +98,18 @@ public class ValidationService {
             throw new RuntimeException("Errore critico durante il rifiuto della colonnina: " + e.getMessage(), e);
         } finally {
             closeQuietly(connection);
+        }
+    }
+
+    public List<ChargingStation> getPendingStations() {
+        try (Connection connection = DatabaseManager.getConnection()) {
+            StationDao stationDao = daoFactory.createStationDao(connection);
+
+            // Richiamiamo il DAO filtrando per lo stato corretto
+            return stationDao.findByStatus(it.unifi.ing.chargenet.domain.infrastructure.StationStatus.PENDING_VERIFICATION);
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Errore durante il recupero delle colonnine in attesa di validazione", e);
         }
     }
 
