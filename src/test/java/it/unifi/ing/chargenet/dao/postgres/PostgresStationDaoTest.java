@@ -353,5 +353,30 @@ class PostgresStationDaoTest {
         // --- ASSERT 2: Il database DEVE bloccare questa operazione ---
         assertFalse(failedAttempt, "La seconda prenotazione DEVE fallire restituendo false, perché la stazione non è più ACTIVE");
     }
+
+    @Test
+    @DisplayName("Conteggio stazioni per trasformatore")
+    void testCountByTransformer() {
+        // --- ARRANGE ---
+        // Usiamo il trasformatore ID=1 già inserito nel setUp()
+        // Creiamo 3 stazioni collegate a questo trasformatore
+        ChargingStation s1 = createMockStation("S1", 0.0, 0.0, StationStatus.ACTIVE);
+        ChargingStation s2 = createMockStation("S2", 1.0, 1.0, StationStatus.ACTIVE);
+        ChargingStation s3 = createMockStation("S3", 2.0, 2.0, StationStatus.ACTIVE);
+
+        stationDao.save(s1);
+        stationDao.save(s2);
+        stationDao.save(s3);
+
+        // --- ACT ---
+        int count = stationDao.countByTransformer(1L);
+
+        // --- ASSERT ---
+        assertEquals(3, count, "Il conteggio delle stazioni per il trasformatore 1 deve essere 3");
+
+        // Verifica anche un caso di trasformatore vuoto
+        int zeroCount = stationDao.countByTransformer(999L);
+        assertEquals(0, zeroCount, "Il conteggio per un trasformatore inesistente deve essere 0");
+    }
 }
 

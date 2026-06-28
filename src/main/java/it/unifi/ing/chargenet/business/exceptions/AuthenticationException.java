@@ -1,4 +1,4 @@
-package it.unifi.ing.chargenet.business.services;
+package it.unifi.ing.chargenet.business.exceptions;
 
 public class AuthenticationException extends RuntimeException {
 

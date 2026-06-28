@@ -21,7 +21,7 @@ public class GridCluster {
     private List<PowerTransformer> transformers;
     private Map<Long, List<ChargingStation>> stationsByTransformer;
     private List<ChargingStation> allStations;
-
+    
     private GridCluster() {
         this.transformers = new ArrayList<>();
         this.stationsByTransformer = new HashMap<>();
@@ -50,6 +50,13 @@ public class GridCluster {
             if (stationsByTransformer.containsKey(tId)) {
                 stationsByTransformer.get(tId).add(station);
             }
+        }
+    }
+
+    public void registerNewStation(ChargingStation s) {
+        this.allStations.add(s);
+        if (stationsByTransformer.containsKey(s.getTransformer().getId())) {
+            stationsByTransformer.get(s.getTransformer().getId()).add(s);
         }
     }
 

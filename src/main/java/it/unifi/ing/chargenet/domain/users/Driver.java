@@ -87,6 +87,14 @@ public class Driver extends User {
         this.walletBalance = this.walletBalance.subtract(newPlan.getMonthlyFee()); // aggiunto questa riga durante l' implementazione del wallet service
     }
 
+    /**
+     * Aggiorna la posizione corrente del Driver simulando una lettura GPS.
+     */
+    public void updatePosition(double latitude, double longitude) {
+        this.latitude = latitude;
+        this.longitude = longitude;
+    }
+
     // Metodo statico per ricostruire l'oggetto dal Database
     public static Driver reconstitute(Long id, String name, String email, String password,
                                       Double latitude, Double longitude, ConnectorType connectorType,
