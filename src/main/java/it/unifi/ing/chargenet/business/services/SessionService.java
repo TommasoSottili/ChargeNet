@@ -9,6 +9,7 @@ import it.unifi.ing.chargenet.domain.financials.Transaction;
 import it.unifi.ing.chargenet.domain.financials.TransactionType;
 import it.unifi.ing.chargenet.domain.infrastructure.StationStatus;
 import it.unifi.ing.chargenet.dao.postgres.DatabaseManager;
+import it.unifi.ing.chargenet.domain.users.StationOperator;
 
 // IMPORTIAMO SOLO LE INTERFACCE! (Purezza Architetturale)
 import it.unifi.ing.chargenet.dao.interfaces.DaoFactory;
@@ -221,6 +222,77 @@ public class SessionService {
             return sessionDao.findActiveSessions();
         } catch (SQLException e) {
             throw new RuntimeException("Errore durante il recupero delle sessioni attive", e);
+        }
+    }
+
+    /**
+     * SODDISFA UC4 (View Revenue Stats)
+     * Conta il numero totale di sessioni storiche associate alle colonnine di un operatore.
+     */
+    public int countSessionsByOperator(StationOperator operator) {
+        if (operator == null) {
+            throw new IllegalArgumentException("L'operatore non può essere nullo.");
+        }
+
+        try (Connection connection = dbManager.getConnection()) {
+            SessionDao sessionDao = daoFactory.createSessionDao(connection);
+            return sessionDao.countByOperatorId(operator.getId());
+        } catch (SQLException e) {
+            throw new RuntimeException("Errore durante il conteggio delle sessioni per operatore", e);
+        }
+    }
+
+    /**
+     * SODDISFA UC4 (View Revenue Stats)
+     * Calcola il totale dei kWh erogati da tutte le colonnine di un operatore.
+     */
+    public double calculateTotalEnergySoldByOperator(StationOperator operator) {
+        if (operator == null) {
+            throw new IllegalArgumentException("L'operatore non può essere nullo.");
+        }
+
+        try (Connection connection = dbManager.getConnection()) {
+            SessionDao sessionDao = daoFactory.createSessionDao(connection);
+
+            // Nota per il DAO: assicurati che il metodo sumEnergyByOperatorId
+            // restituisca 0.0 e non un valore nullo se l'operatore non ha ancora sessioni.
+            return sessionDao.sumEnergyByOperatorId(operator.getId());
+        } catch (SQLException e) {
+            throw new RuntimeException("Errore durante il calcolo dell'energia totale venduta", e);
+        }
+    }
+
+    /**
+     * SODDISFA UC12 (View My Sessions)
+     * Recupera lo storico di tutte le sessioni completate da un Driver.
+     */
+    public List<ChargingSession> getSessionHistoryByDriver(Driver driver) {
+        if (driver == null) {
+            throw new IllegalArgumentException("Il driver non può essere nullo.");
+        }
+
+        try (Connection connection = dbManager.getConnection()) {
+            SessionDao sessionDao = daoFactory.createSessionDao(connection);
+            return sessionDao.findCompletedByDriverId(driver.getId());
+        } catch (SQLException e) {
+            throw new RuntimeException("Errore durante il recupero dello storico sessioni del driver", e);
+        }
+    }
+
+    /**
+     * SODDISFA UC10 (Close Charging Session)
+     * Recupera l'eventuale sessione attualmente in corso per un Driver.
+     */
+    public ChargingSession getActiveSessionForDriver(Driver driver) {
+        if (driver == null) {
+            throw new IllegalArgumentException("Il driver non può essere nullo.");
+        }
+
+        try (Connection connection = dbManager.getConnection()) {
+            SessionDao sessionDao = daoFactory.createSessionDao(connection);
+            return sessionDao.findActiveByDriverId(driver.getId());
+        } catch (SQLException e) {
+            throw new RuntimeException("Errore durante il recupero della sessione attiva del driver", e);
         }
     }
 

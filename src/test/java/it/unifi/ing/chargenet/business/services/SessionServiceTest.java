@@ -10,6 +10,7 @@ import it.unifi.ing.chargenet.domain.sessions.SessionStatus;
 import it.unifi.ing.chargenet.domain.users.ConnectorType;
 import it.unifi.ing.chargenet.domain.users.Driver;
 import it.unifi.ing.chargenet.domain.users.SubscriptionPlan;
+import it.unifi.ing.chargenet.domain.users.StationOperator; // Aggiunto import
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,9 +51,8 @@ class SessionServiceTest {
         mockedDbManager.when(DatabaseManager::getConnection).thenReturn(connectionMock);
 
         // 2. RISOLUZIONE COSTRUTTORE PRIVATO: Usiamo la Reflection per istanziare DatabaseManager
-        // Questo bypassa il vincolo "private" solo all'interno del test, senza modificare il codice sorgente
         Constructor<DatabaseManager> constructor = DatabaseManager.class.getDeclaredConstructor();
-        constructor.setAccessible(true); // Forziamo l'accesso al costruttore privato
+        constructor.setAccessible(true);
         DatabaseManager dbManagerInstance = constructor.newInstance();
 
         // 3. Creiamo i mock delle interfacce
@@ -74,7 +74,6 @@ class SessionServiceTest {
 
     @AfterEach
     void tearDown() {
-        // Rilasciamo il blocco statico per non inquinare gli altri test del progetto
         if (mockedDbManager != null) {
             mockedDbManager.close();
         }
@@ -105,7 +104,6 @@ class SessionServiceTest {
         Driver richDriver = new Driver(0.0, 0.0, ConnectorType.TYPE_2, SubscriptionPlan.PREMIUM, 50.0, "Ricco", "r@test.com", "pwd");
         richDriver.refund(new BigDecimal("100.00"));
 
-        // CORREZIONE: Inserite le tariffe reali (BigDecimal.ZERO) al posto di 'null'
         ChargingStation station = ChargingStation.reconstitute(1L, null, null, "Stazione", null, 0.0, 0.0, ConnectorType.TYPE_2, 50.0, false, BigDecimal.ZERO, BigDecimal.ZERO, 0.0, 0, StationStatus.ACTIVE, null, null);
 
         ChargingStrategy strategyMock = mock(ChargingStrategy.class);
@@ -127,7 +125,6 @@ class SessionServiceTest {
     void testCloseSession_Success() throws Exception {
         Driver driver = new Driver(0.0, 0.0, ConnectorType.TYPE_2, SubscriptionPlan.BASIC, 50.0, "Test", "t@test.com", "pwd");
 
-        // CORREZIONE: Inserite le tariffe reali
         ChargingStation station = ChargingStation.reconstitute(1L, null, null, "Stazione", null, 0.0, 0.0, ConnectorType.TYPE_2, 50.0, false, BigDecimal.ZERO, BigDecimal.ZERO, 0.0, 0, StationStatus.ACTIVE, null, null);
         ChargingSession session = ChargingSession.open(driver, station, "FAST", 20.0);
 
@@ -149,7 +146,6 @@ class SessionServiceTest {
         Driver driver = new Driver(0.0, 0.0, ConnectorType.TYPE_2, SubscriptionPlan.BASIC, 50.0, "Test", "t@test.com", "pwd");
         driver.refund(new BigDecimal("50.00"));
 
-        // CORREZIONE: Inserite le tariffe reali
         ChargingStation station = ChargingStation.reconstitute(1L, null, null, "Stazione", null, 0.0, 0.0, ConnectorType.TYPE_2, 50.0, false, BigDecimal.ZERO, BigDecimal.ZERO, 0.0, 0, StationStatus.ACTIVE, null, null);
         ChargingSession session = ChargingSession.open(driver, station, "FAST", 20.0);
 
@@ -178,5 +174,118 @@ class SessionServiceTest {
         assertEquals(1, result.size());
         verify(sessionDaoMock, times(1)).findActiveSessions();
         verify(connectionMock, times(1)).close();
+    }
+
+    // =========================================================================
+    // --- 4. TEST: METODI DI LETTURA E AGGREGAZIONE (Use Cases UI) ---
+    // =========================================================================
+
+    @Test
+    void testCountSessionsByOperator_Success() throws Exception {
+        StationOperator mockOperator = mock(StationOperator.class);
+        doReturn(10L).when(mockOperator).getId();
+
+        doReturn(25).when(sessionDaoMock).countByOperatorId(10L);
+
+        int result = sessionService.countSessionsByOperator(mockOperator);
+
+        assertEquals(25, result);
+        verify(sessionDaoMock, times(1)).countByOperatorId(10L);
+        verify(connectionMock, times(1)).close();
+    }
+
+    @Test
+    void testCountSessionsByOperator_NullOperator() {
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            sessionService.countSessionsByOperator(null);
+        });
+        assertEquals("L'operatore non può essere nullo.", exception.getMessage());
+    }
+
+    @Test
+    void testCalculateTotalEnergySoldByOperator_Success() throws Exception {
+        StationOperator mockOperator = mock(StationOperator.class);
+        doReturn(15L).when(mockOperator).getId();
+
+        doReturn(450.75).when(sessionDaoMock).sumEnergyByOperatorId(15L);
+
+        double result = sessionService.calculateTotalEnergySoldByOperator(mockOperator);
+
+        assertEquals(450.75, result);
+        verify(sessionDaoMock, times(1)).sumEnergyByOperatorId(15L);
+        verify(connectionMock, times(1)).close();
+    }
+
+    @Test
+    void testCalculateTotalEnergySoldByOperator_NullOperator() {
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            sessionService.calculateTotalEnergySoldByOperator(null);
+        });
+        assertEquals("L'operatore non può essere nullo.", exception.getMessage());
+    }
+
+    @Test
+    void testGetSessionHistoryByDriver_Success() throws Exception {
+        Driver mockDriver = mock(Driver.class);
+        doReturn(5L).when(mockDriver).getId();
+
+        ChargingSession session1 = mock(ChargingSession.class);
+        ChargingSession session2 = mock(ChargingSession.class);
+        List<ChargingSession> mockHistory = List.of(session1, session2);
+
+        doReturn(mockHistory).when(sessionDaoMock).findCompletedByDriverId(5L);
+
+        List<ChargingSession> result = sessionService.getSessionHistoryByDriver(mockDriver);
+
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        verify(sessionDaoMock, times(1)).findCompletedByDriverId(5L);
+        verify(connectionMock, times(1)).close();
+    }
+
+    @Test
+    void testGetSessionHistoryByDriver_NullDriver() {
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            sessionService.getSessionHistoryByDriver(null);
+        });
+        assertEquals("Il driver non può essere nullo.", exception.getMessage());
+    }
+
+    @Test
+    void testGetActiveSessionForDriver_ReturnsSession() throws Exception {
+        Driver mockDriver = mock(Driver.class);
+        doReturn(8L).when(mockDriver).getId();
+
+        ChargingSession mockSession = mock(ChargingSession.class);
+        doReturn(mockSession).when(sessionDaoMock).findActiveByDriverId(8L);
+
+        ChargingSession result = sessionService.getActiveSessionForDriver(mockDriver);
+
+        assertNotNull(result);
+        assertEquals(mockSession, result);
+        verify(sessionDaoMock, times(1)).findActiveByDriverId(8L);
+        verify(connectionMock, times(1)).close();
+    }
+
+    @Test
+    void testGetActiveSessionForDriver_ReturnsNull() throws Exception {
+        Driver mockDriver = mock(Driver.class);
+        doReturn(9L).when(mockDriver).getId();
+
+        doReturn(null).when(sessionDaoMock).findActiveByDriverId(9L);
+
+        ChargingSession result = sessionService.getActiveSessionForDriver(mockDriver);
+
+        assertNull(result); // Corretto: il driver non ha sessioni in corso
+        verify(sessionDaoMock, times(1)).findActiveByDriverId(9L);
+        verify(connectionMock, times(1)).close();
+    }
+
+    @Test
+    void testGetActiveSessionForDriver_NullDriver() {
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            sessionService.getActiveSessionForDriver(null);
+        });
+        assertEquals("Il driver non può essere nullo.", exception.getMessage());
     }
 }

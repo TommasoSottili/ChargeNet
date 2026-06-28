@@ -301,4 +301,23 @@ public class PostgresStationDao implements StationDao {
             throw new RuntimeException("Errore durante l'acquireAtomicHold sulla stazione ID: " + stationId, e);
         }
     }
+
+    @Override
+    public int countByTransformer(Long transformerId) {
+        String query = "SELECT COUNT(*) FROM charging_stations WHERE transformer_id = ?";
+
+        try (PreparedStatement stmt = connection.prepareStatement(query)) {
+            // Utilizziamo setLong per rispettare il tipo del parametro
+            stmt.setLong(1, transformerId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1); // Questo rimane getInt perché il COUNT restituisce un intero
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Errore nel conteggio delle stazioni per il trasformatore " + transformerId, e);
+        }
+        return 0;
+    }
 }

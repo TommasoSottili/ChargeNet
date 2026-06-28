@@ -191,4 +191,75 @@ public class PostgresSessionDao implements SessionDao {
 
         return session;
     }
+
+    // =========================================================================
+    // METODI AGGIUNTIVI PER SUPPORTO SERVICE LAYER E USE CASES
+    // =========================================================================
+
+    @Override
+    public ChargingSession findActiveByDriverId(Long driverId) {
+        String sql = "SELECT * FROM charging_sessions WHERE driver_id = ? AND status = 'ACTIVE'";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setLong(1, driverId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return mapResultSetToSession(rs);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Errore ricerca sessione attiva per il driver", e);
+        }
+        return null;
+    }
+
+    @Override
+    public List<ChargingSession> findCompletedByDriverId(Long driverId) {
+        String sql = "SELECT * FROM charging_sessions WHERE driver_id = ? AND status = 'COMPLETED'";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setLong(1, driverId);
+            return executeResultSetToList(stmt);
+        } catch (SQLException e) {
+            throw new RuntimeException("Errore ricerca sessioni completate per il driver", e);
+        }
+    }
+
+    @Override
+    public int countByOperatorId(Long operatorId) {
+        // Usiamo una JOIN perché la sessione conosce la stazione, e la stazione conosce l'operatore
+        String sql = "SELECT COUNT(cs.id) FROM charging_sessions cs " +
+                "JOIN charging_stations st ON cs.station_id = st.id " +
+                "WHERE st.operator_id = ?";
+
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setLong(1, operatorId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Errore durante il conteggio delle sessioni per l'operatore", e);
+        }
+        return 0;
+    }
+
+    @Override
+    public double sumEnergyByOperatorId(Long operatorId) {
+        // Usiamo COALESCE per garantire che torni 0.0 e non NULL se l'operatore non ha mai venduto energia
+        String sql = "SELECT COALESCE(SUM(cs.kwh_delivered), 0.0) FROM charging_sessions cs " +
+                "JOIN charging_stations st ON cs.station_id = st.id " +
+                "WHERE st.operator_id = ?";
+
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setLong(1, operatorId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getDouble(1);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Errore durante il calcolo dell'energia venduta per l'operatore", e);
+        }
+        return 0.0;
+    }
 }

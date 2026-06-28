@@ -1,13 +1,13 @@
 package it.unifi.ing.chargenet.business.services;
 
+import it.unifi.ing.chargenet.business.exceptions.DuplicateEmailException;
 import it.unifi.ing.chargenet.dao.interfaces.DaoFactory;
 import it.unifi.ing.chargenet.dao.interfaces.UserDao;
 import it.unifi.ing.chargenet.dao.postgres.DatabaseManager;
 import it.unifi.ing.chargenet.domain.users.Driver;
 import it.unifi.ing.chargenet.domain.users.Role;
 import it.unifi.ing.chargenet.domain.users.User;
-import it.unifi.ing.chargenet.business.services.DuplicateEmailException;
-import it.unifi.ing.chargenet.business.services.AuthenticationException;
+import it.unifi.ing.chargenet.business.exceptions.AuthenticationException;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

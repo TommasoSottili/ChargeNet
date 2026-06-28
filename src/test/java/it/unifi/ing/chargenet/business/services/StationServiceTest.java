@@ -1,5 +1,6 @@
 package it.unifi.ing.chargenet.business.services;
 
+import it.unifi.ing.chargenet.business.exceptions.StationNotAvailableException;
 import it.unifi.ing.chargenet.dao.interfaces.DaoFactory;
 import it.unifi.ing.chargenet.dao.interfaces.StationDao;
 import it.unifi.ing.chargenet.dao.postgres.DatabaseManager;
@@ -7,14 +8,16 @@ import it.unifi.ing.chargenet.domain.infrastructure.ChargingStation;
 import it.unifi.ing.chargenet.domain.infrastructure.PowerTransformer;
 import it.unifi.ing.chargenet.domain.users.ConnectorType;
 import it.unifi.ing.chargenet.domain.users.StationOperator;
-import it.unifi.ing.chargenet.business.services.InvalidStationParametersException;
 import it.unifi.ing.chargenet.domain.users.Driver;
+import it.unifi.ing.chargenet.business.exceptions.NoTransformerAvailableException;
+import it.unifi.ing.chargenet.business.core.GridCluster;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 
+import java.util.List;
 import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -28,6 +31,8 @@ class StationServiceTest {
 
     // Gestore per la connessione statica
     private MockedStatic<DatabaseManager> mockedDbManager;
+    private MockedStatic<GridCluster> mockedGridCluster;
+    private GridCluster gridClusterMock;
 
     private DaoFactory daoFactoryMock;
     private Connection connectionMock;
@@ -45,15 +50,19 @@ class StationServiceTest {
         stationDaoMock = mock(StationDao.class);
         doReturn(stationDaoMock).when(daoFactoryMock).createStationDao(any(Connection.class));
 
-        // 3. Inizializzazione Service
+        // 3. SETUP GRIDCLUSTER (Globale per tutti i test)
+        mockedGridCluster = mockStatic(GridCluster.class);
+        gridClusterMock = mock(GridCluster.class);
+        mockedGridCluster.when(GridCluster::getInstance).thenReturn(gridClusterMock);
+
+        // 4. Inizializzazione Service
         stationService = new StationService(daoFactoryMock);
     }
 
     @AfterEach
     void tearDown() {
-        if (mockedDbManager != null) {
-            mockedDbManager.close();
-        }
+        if (mockedDbManager != null) mockedDbManager.close();
+        if (mockedGridCluster != null) mockedGridCluster.close(); // Fondamentale
     }
 
     @Test
@@ -220,5 +229,116 @@ class StationServiceTest {
 
         // Verifichiamo che la connessione sia stata chiusa anche in sola lettura
         verify(connectionMock, times(1)).close();
+    }
+
+    @Test
+    @DisplayName("Registrazione con assegnazione automatica del trasformatore")
+    void testRegisterStation_AutoAssignTransformer_Success() throws SQLException {
+        // --- ARRANGE ---
+        StationOperator mockOperator = mock(StationOperator.class);
+
+        PowerTransformer t1 = mock(PowerTransformer.class);
+        PowerTransformer t2 = mock(PowerTransformer.class);
+        when(t1.getId()).thenReturn(1L);
+        when(t2.getId()).thenReturn(2L);
+
+        // CONFIGURAZIONE MOCK STATICO:
+        // Quando viene chiamato getInstance(), restituisci un mock che al getTransformers() ritorna la lista
+        GridCluster gridClusterMock = mock(GridCluster.class);
+        mockedGridCluster.when(GridCluster::getInstance).thenReturn(gridClusterMock);
+        when(gridClusterMock.getTransformers()).thenReturn(java.util.List.of(t1, t2));
+
+        when(stationDaoMock.countByTransformer(1L)).thenReturn(2);
+        when(stationDaoMock.countByTransformer(2L)).thenReturn(5);
+
+        // --- ACT ---
+        stationService.registerStation(mockOperator, "Stazione Test", "Via X", 0.0, 0.0,
+                ConnectorType.CCS_2, 50.0, false, BigDecimal.TEN);
+
+        // --- ASSERT ---
+        verify(stationDaoMock).save(argThat(s -> s.getTransformer().getId() == 1L));
+        verify(connectionMock).commit();
+    }
+
+    @Test
+    @DisplayName("Registrazione fallita - Rete satura")
+    void testRegisterStation_NoTransformerAvailable() throws SQLException {
+        // --- ARRANGE ---
+        StationOperator mockOperator = mock(StationOperator.class);
+        PowerTransformer t1 = mock(PowerTransformer.class);
+        when(t1.getId()).thenReturn(1L);
+
+        // Simuliamo che il trasformatore sia al massimo (es. 10 stazioni)
+        when(stationDaoMock.countByTransformer(1L)).thenReturn(10);
+
+        // --- ACT & ASSERT ---
+        assertThrows(NoTransformerAvailableException.class, () -> {
+            stationService.registerStation(mockOperator, "Stazione Fallita", "Via Y", 0.0, 0.0,
+                    ConnectorType.CCS_2, 50.0, false, BigDecimal.TEN);
+        });
+
+        // Verifichiamo che NON sia stato chiamato save() e che sia stato fatto il rollback
+        verify(stationDaoMock, never()).save(any());
+        verify(connectionMock, never()).commit();
+    }
+
+    @Test
+    @DisplayName("Recupero stazioni operatore - Successo")
+    void testGetStationsByOperator_Success() {
+        // ARRANGE
+        StationOperator mockOp = mock(StationOperator.class);
+        when(mockOp.getId()).thenReturn(42L);
+        List<ChargingStation> expected = java.util.Collections.singletonList(mock(ChargingStation.class));
+        when(stationDaoMock.findByOperator(42L)).thenReturn(expected);
+
+        // ACT
+        List<ChargingStation> result = stationService.getStationsByOperator(mockOp);
+
+        // ASSERT
+        assertEquals(expected, result);
+        verify(stationDaoMock).findByOperator(42L);
+    }
+
+    @Test
+    @DisplayName("Recupero mappa stazioni - Filtraggio corretto")
+    void testGetAllStations_Filtering() {
+        // ARRANGE
+        // Creiamo 3 stazioni con status diversi
+        ChargingStation s1 = mock(ChargingStation.class);
+        when(s1.getStatus()).thenReturn(it.unifi.ing.chargenet.domain.infrastructure.StationStatus.ACTIVE);
+
+        ChargingStation s2 = mock(ChargingStation.class);
+        when(s2.getStatus()).thenReturn(it.unifi.ing.chargenet.domain.infrastructure.StationStatus.PENDING_VERIFICATION);
+
+        ChargingStation s3 = mock(ChargingStation.class);
+        when(s3.getStatus()).thenReturn(it.unifi.ing.chargenet.domain.infrastructure.StationStatus.REJECTED);
+
+        List<ChargingStation> allInDb = java.util.Arrays.asList(s1, s2, s3);
+        when(stationDaoMock.findAll()).thenReturn(allInDb);
+
+        // ACT
+        List<ChargingStation> result = stationService.getAllStations();
+
+        // ASSERT
+        assertEquals(1, result.size(), "Solo la stazione ACTIVE dovrebbe passare il filtro");
+        assertTrue(result.contains(s1), "La stazione ACTIVE deve essere presente");
+        assertFalse(result.contains(s2), "La stazione PENDING non deve essere presente");
+        assertFalse(result.contains(s3), "La stazione REJECTED non deve essere presente");
+    }
+
+    @Test
+    @DisplayName("Recupero dashboard sovraccarico - Successo")
+    void testGetOverloadedStations_Success() {
+        // ARRANGE
+        List<ChargingStation> expected = java.util.Collections.singletonList(mock(ChargingStation.class));
+        when(stationDaoMock.findByStatus(it.unifi.ing.chargenet.domain.infrastructure.StationStatus.OVERLOADED))
+                .thenReturn(expected);
+
+        // ACT
+        List<ChargingStation> result = stationService.getOverloadedStations();
+
+        // ASSERT
+        assertEquals(expected, result);
+        verify(stationDaoMock).findByStatus(it.unifi.ing.chargenet.domain.infrastructure.StationStatus.OVERLOADED);
     }
 }
