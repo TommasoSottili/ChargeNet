@@ -273,20 +273,26 @@ class RatingServiceTest {
     void testSuspendStationFromAlert_Success() throws SQLException {
         // --- ARRANGE ---
         RatingAlert mockAlert = mock(RatingAlert.class);
-        ChargingStation mockStation = mock(ChargingStation.class);
 
-        // Colleghiamo l'alert alla stazione finta
-        when(mockAlert.getStation()).thenReturn(mockStation);
+        // La station DENTRO l'alert è uno stub: ha solo l'id (come arriverebbe da findByStatus)
+        ChargingStation stubStation = mock(ChargingStation.class);
+        when(stubStation.getId()).thenReturn(7L);
+
+        when(mockAlert.getStation()).thenReturn(stubStation);
         when(mockAlert.getId()).thenReturn(99L);
-        when(mockStation.getName()).thenReturn("Colonnina Difettosa");
 
-        // Prepariamo i DAO finti
+        // La station COMPLETA che il DAO restituisce quando la si ri-idrata via findById
+        ChargingStation fullStation = mock(ChargingStation.class);
+        when(fullStation.getId()).thenReturn(7L);
+        when(fullStation.getName()).thenReturn("Colonnina Difettosa");
+
         RatingAlertDao mockAlertDao = mock(RatingAlertDao.class);
         StationDao mockStationDao = mock(StationDao.class);
-
-        // Istruiamo la Factory
         when(daoFactoryMock.createRatingAlertDao(any(Connection.class))).thenReturn(mockAlertDao);
         when(daoFactoryMock.createStationDao(any(Connection.class))).thenReturn(mockStationDao);
+
+        // Il cuore del cambiamento: findById(7L) restituisce la station COMPLETA
+        when(mockStationDao.findById(7L)).thenReturn(fullStation);
 
         String managerNotes = "Danni fisici confermati. Sospensione immediata.";
 
@@ -294,16 +300,20 @@ class RatingServiceTest {
         ratingService.suspendStationFromAlert(mockAlert, managerNotes);
 
         // --- ASSERT ---
-        // 1. Verifichiamo la Logica di Dominio (USANDO IL TUO METODO resolveSuspend)
-        verify(mockAlert, times(1)).resolveSuspend(managerNotes);
-        verify(mockStation, times(1)).setSuspended();
+        // 1. Ha ri-idratato la station partendo dall'id dello stub nell'alert
+        verify(mockStationDao, times(1)).findById(7L);
 
-        // 2. Verifichiamo il Database e le Transazioni
-        verify(connectionMock, times(1)).setAutoCommit(false); // Transazione aperta?
-        verify(mockAlertDao, times(1)).update(mockAlert);      // Alert aggiornato?
-        verify(mockStationDao, times(1)).update(mockStation);  // Stazione aggiornata?
-        verify(connectionMock, times(1)).commit();             // Tutto salvato?
-        verify(connectionMock, times(1)).close();              // Connessione chiusa?
+        // 2. La logica di dominio opera sulla station COMPLETA, non sullo stub
+        verify(mockAlert, times(1)).resolveSuspend(managerNotes);
+        verify(fullStation, times(1)).setSuspended();
+        verify(stubStation, never()).setSuspended();   // lo stub NON deve essere toccato
+
+        // 3. Persistenza e transazione
+        verify(connectionMock, times(1)).setAutoCommit(false);
+        verify(mockAlertDao, times(1)).update(mockAlert);
+        verify(mockStationDao, times(1)).update(fullStation);   // aggiorna la COMPLETA
+        verify(connectionMock, times(1)).commit();
+        verify(connectionMock, times(1)).close();
     }
 
     @Test

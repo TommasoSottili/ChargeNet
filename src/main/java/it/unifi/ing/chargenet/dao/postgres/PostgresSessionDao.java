@@ -2,6 +2,7 @@ package it.unifi.ing.chargenet.dao.postgres;
 
 import it.unifi.ing.chargenet.dao.interfaces.SessionDao;
 import it.unifi.ing.chargenet.domain.sessions.ChargingSession;
+import it.unifi.ing.chargenet.domain.sessions.ChargingType;
 import it.unifi.ing.chargenet.domain.users.Driver;
 import it.unifi.ing.chargenet.domain.infrastructure.ChargingStation;
 import it.unifi.ing.chargenet.domain.sessions.SessionStatus;
@@ -27,7 +28,7 @@ public class PostgresSessionDao implements SessionDao {
 
             stmt.setLong(1, session.getDriver().getId()); // Adatta i getter se nel tuo modello si chiamano diversamente
             stmt.setLong(2, session.getStation().getId());
-            stmt.setString(3, session.getStrategyUsed()); // Presumo sia un Enum
+            stmt.setString(3, session.getStrategyUsed().name()); // Presumo sia un Enum
             stmt.setDouble(4, session.getBatteryStart());
             stmt.setDouble(5, session.getBatteryCurrent());
             stmt.setDouble(6, session.getKwhDelivered());
@@ -162,24 +163,25 @@ public class PostgresSessionDao implements SessionDao {
     }
 
     private ChargingSession mapResultSetToSession(ResultSet rs) throws SQLException {
-        // 1. Prima ricostruisci gli oggetti annidati con i loro ID
-        //    (versioni "leggere" con solo l'id, per evitare N query)
-        Driver driver = Driver.reconstitute(rs.getLong("driver_id"));
-        ChargingStation station = ChargingStation.reconstitute(rs.getLong("station_id"));
+        // Idratazione COMPLETA degli oggetti annidati: una sessione ricostruita dal DB
+        // deve essere un aggregato valido, non gusci con solo l'id.
+        // Stesso package dao.postgres → nessun import nuovo da aggiungere.
+        PostgresUserDao userDao = new PostgresUserDao(connection);
+        PostgresStationDao stationDao = new PostgresStationDao(connection);
 
-        // 2. Converti la stringa dello status nell'enum corrispondente
+        Driver driver = (Driver) userDao.findById(rs.getLong("driver_id"));
+        ChargingStation station = stationDao.findById(rs.getLong("station_id"));
+
         SessionStatus status = SessionStatus.valueOf(rs.getString("status"));
 
-        // 3. Gestisci i timestamp nullable
         Timestamp closedAtTs = rs.getTimestamp("closed_at");
         LocalDateTime closedAt = (closedAtTs != null) ? closedAtTs.toLocalDateTime() : null;
 
-        // 4. Ricostruisci la sessione completa
-        ChargingSession session = ChargingSession.reconstitute(
+        return ChargingSession.reconstitute(
                 rs.getLong("id"),
                 driver,
                 station,
-                rs.getString("strategy_used"),
+                ChargingType.valueOf(rs.getString("strategy_used")),
                 rs.getDouble("battery_start"),
                 rs.getDouble("battery_current"),
                 rs.getDouble("kwh_delivered"),
@@ -188,8 +190,6 @@ public class PostgresSessionDao implements SessionDao {
                 rs.getTimestamp("opened_at").toLocalDateTime(),
                 closedAt
         );
-
-        return session;
     }
 
     // =========================================================================

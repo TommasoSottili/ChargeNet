@@ -6,6 +6,7 @@ import it.unifi.ing.chargenet.domain.sessions.ChargingSession;
 import it.unifi.ing.chargenet.business.services.SessionService;
 import it.unifi.ing.chargenet.business.services.StationService;
 import it.unifi.ing.chargenet.business.services.RatingService;
+import it.unifi.ing.chargenet.domain.sessions.ChargingType;
 
 import java.util.HashMap;
 import java.util.List;
@@ -79,8 +80,8 @@ public class GridMonitor extends Thread {
 
         for (ChargingSession session : activeSessions) {
             // Deleghiamo al collega l'aggiornamento dei kwh consumati nel database
-            String strategyString = session.getStrategyUsed();
-            ChargingStrategy currentStrategy = ChargingStrategy.fromString(strategyString);
+            ChargingType strategyString = session.getStrategyUsed();
+            ChargingStrategy currentStrategy = ChargingStrategy.fromEnum(strategyString);
             sessionService.addTick(session, currentStrategy);
 
             // Calcoliamo il calore generato da questa specifica sessione

@@ -1,4 +1,4 @@
-package it.unifi.ing.chargenet.presentation.utils;
+package it.unifi.ing.chargenet.business.utils;
 
 public class GpsSimulator {
     // Coordinate del "rettangolo" che racchiude l'area urbana di Firenze
@@ -11,7 +11,7 @@ public class GpsSimulator {
      * Genera un punto casuale all'interno dell'area di Firenze.
      * Simula il rilevamento di un sensore GPS.
      */
-    public static double[] getNewRandomPosition() {
+    public static double[] randomPosition() {
         double lat = FIRENZE_MIN_LAT + Math.random() * (FIRENZE_MAX_LAT - FIRENZE_MIN_LAT);
         double lng = FIRENZE_MIN_LNG + Math.random() * (FIRENZE_MAX_LNG - FIRENZE_MIN_LNG);
         return new double[]{ lat, lng };

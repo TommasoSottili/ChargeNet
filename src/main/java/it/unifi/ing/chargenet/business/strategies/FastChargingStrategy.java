@@ -3,6 +3,7 @@ package it.unifi.ing.chargenet.business.strategies;
 import it.unifi.ing.chargenet.domain.infrastructure.ChargingStation;
 import it.unifi.ing.chargenet.domain.users.Driver;
 import it.unifi.ing.chargenet.domain.users.SubscriptionPlan;
+import it.unifi.ing.chargenet.domain.sessions.ChargingType;
 
 public class FastChargingStrategy implements ChargingStrategy {
 
@@ -31,7 +32,7 @@ public class FastChargingStrategy implements ChargingStrategy {
     }
 
     @Override
-    public String getName() {
-        return "FAST";
+    public ChargingType getType() {
+        return ChargingType.FAST;
     }
 }

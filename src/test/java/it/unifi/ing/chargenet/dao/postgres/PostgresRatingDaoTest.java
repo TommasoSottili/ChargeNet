@@ -3,6 +3,7 @@ package it.unifi.ing.chargenet.dao.postgres;
 import it.unifi.ing.chargenet.domain.feedback.Rating;
 import it.unifi.ing.chargenet.domain.infrastructure.ChargingStation;
 import it.unifi.ing.chargenet.domain.sessions.ChargingSession;
+import it.unifi.ing.chargenet.domain.sessions.ChargingType;
 import it.unifi.ing.chargenet.domain.users.Driver;
 import org.junit.jupiter.api.*;
 
@@ -86,7 +87,7 @@ class PostgresRatingDaoTest {
 
         mockSession = ChargingSession.reconstitute(
                 1L, mockDriver, mockStation,
-                "STANDARD", 20.0, 80.0, 30.0,
+                ChargingType.ECO, 20.0, 80.0, 30.0,
                 new BigDecimal("15.00"), null,
                 LocalDateTime.now().minusHours(1), LocalDateTime.now()
         );
@@ -167,7 +168,7 @@ class PostgresRatingDaoTest {
 
         // 2. Creiamo l'oggetto Sessione fittizio con ID 2
         ChargingSession mockSession2 = ChargingSession.reconstitute(
-                2L, mockDriver, mockStation, "STANDARD", 20.0, 80.0, 30.0,
+                2L, mockDriver, mockStation, ChargingType.ECO, 20.0, 80.0, 30.0,
                 new BigDecimal("15.00"), null, LocalDateTime.now(), LocalDateTime.now()
         );
 
@@ -208,7 +209,7 @@ class PostgresRatingDaoTest {
 
         // 2. Ricreiamo l'oggetto in memoria per la seconda sessione
         ChargingSession mockSession2 = ChargingSession.reconstitute(
-                2L, mockDriver, mockStation, "STANDARD", 20.0, 80.0, 30.0,
+                2L, mockDriver, mockStation, ChargingType.ECO, 20.0, 80.0, 30.0,
                 new BigDecimal("15.00"), null, LocalDateTime.now(), LocalDateTime.now()
         );
 
@@ -260,7 +261,7 @@ class PostgresRatingDaoTest {
 
         // 2. Ricreiamo gli oggetti in memoria corrispondenti
         ChargingSession mockSession2 = ChargingSession.reconstitute(
-                2L, mockDriver, mockStation, "STANDARD", 20.0, 80.0, 30.0,
+                2L, mockDriver, mockStation, ChargingType.ECO, 20.0, 80.0, 30.0,
                 new BigDecimal("15.00"), null, LocalDateTime.now(), LocalDateTime.now()
         );
 
@@ -270,7 +271,7 @@ class PostgresRatingDaoTest {
         );
 
         ChargingSession mockSession3 = ChargingSession.reconstitute(
-                3L, driver2, mockStation, "STANDARD", 20.0, 80.0, 30.0,
+                3L, driver2, mockStation, ChargingType.ECO, 20.0, 80.0, 30.0,
                 new BigDecimal("15.00"), null, LocalDateTime.now(), LocalDateTime.now()
         );
 

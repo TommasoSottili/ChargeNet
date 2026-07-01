@@ -2,6 +2,7 @@ package it.unifi.ing.chargenet.business.strategies;
 
 import it.unifi.ing.chargenet.domain.infrastructure.ChargingStation;
 import it.unifi.ing.chargenet.domain.users.Driver;
+import it.unifi.ing.chargenet.domain.sessions.ChargingType;
 
 public interface ChargingStrategy {
     // Calcola il costo in base ai kWh consumati
@@ -11,10 +12,10 @@ public interface ChargingStrategy {
     double getHeatIncrement(); //Nome del metodo modificato
 
     // Ritorna il nome della strategia (es. "FAST", "ECO")
-    String getName();
+    ChargingType getType();
 
-    static ChargingStrategy fromString(String strategyName) {
-        if ("FAST".equalsIgnoreCase(strategyName)) {
+    static ChargingStrategy fromEnum(ChargingType type) {
+        if (type == ChargingType.FAST) {
             return new FastChargingStrategy();
         }
         return new EcoChargingStrategy();

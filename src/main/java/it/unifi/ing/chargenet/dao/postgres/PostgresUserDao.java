@@ -90,60 +90,17 @@ public class PostgresUserDao implements UserDao {
     @Override
     public User findById(Long id) {
         String sql = "SELECT * FROM users WHERE id = ?";
-
         try (java.sql.PreparedStatement pstmt = connection.prepareStatement(sql)) {
-            pstmt.setLong(1, id); // Impostiamo l'ID cercato
-
+            pstmt.setLong(1, id);
             try (java.sql.ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
-                    // 1. Estraiamo i campi COMUNI
-                    Long dbId = rs.getLong("id");
-                    String name = rs.getString("name");
-                    String dbEmail = rs.getString("email");
-                    String password = rs.getString("password");
-                    it.unifi.ing.chargenet.domain.users.Role role = it.unifi.ing.chargenet.domain.users.Role.valueOf(rs.getString("role"));
-
-                    if (role == it.unifi.ing.chargenet.domain.users.Role.DRIVER) {
-
-                        Double lat = rs.getDouble("latitude"); if(rs.wasNull()) lat = null;
-                        Double lon = rs.getDouble("longitude"); if(rs.wasNull()) lon = null;
-                        Double cap = rs.getDouble("battery_capacity"); if(rs.wasNull()) cap = null;
-
-                        String connTypeStr = rs.getString("connector_type");
-                        var cType = connTypeStr != null ? it.unifi.ing.chargenet.domain.users.ConnectorType.valueOf(connTypeStr) : null;
-
-                        String subPlanStr = rs.getString("subscription_plan");
-                        var sPlan = subPlanStr != null ? it.unifi.ing.chargenet.domain.users.SubscriptionPlan.valueOf(subPlanStr) : null;
-
-                        java.math.BigDecimal balance = rs.getBigDecimal("wallet_balance");
-                        if (balance == null) balance = java.math.BigDecimal.ZERO;
-
-                        return it.unifi.ing.chargenet.domain.users.Driver.reconstitute(
-                                dbId, name, dbEmail, password, lat, lon, cType, sPlan, cap, balance
-                        );
-
-                    } else if (role == it.unifi.ing.chargenet.domain.users.Role.STATION_OPERATOR) {
-
-                        java.math.BigDecimal earnings = rs.getBigDecimal("total_earnings");
-                        if (earnings == null) earnings = java.math.BigDecimal.ZERO;
-
-                        return it.unifi.ing.chargenet.domain.users.StationOperator.reconstitute(
-                                dbId, name, dbEmail, password, earnings
-                        );
-
-                    } else if (role == it.unifi.ing.chargenet.domain.users.Role.ENERGY_MANAGER) {
-
-                        return EnergyManager.reconstitute(
-                                dbId, name, dbEmail, password
-                        );
-                    }
+                    return extractUserFromResultSet(rs);
                 }
             }
         } catch (java.sql.SQLException e) {
             throw new RuntimeException("Errore durante la ricerca dell'utente per ID", e);
         }
-
-        return null; // Ritorna null se non trova nessun utente con quell'ID
+        return null;
     }
 
     @Override
@@ -250,68 +207,19 @@ public class PostgresUserDao implements UserDao {
     // --- Metodi specifici di UserDao ---
     @Override
     public User findByEmail(String email) {
-                 String sql = "SELECT * FROM users WHERE email = ?";
-
-            try (java.sql.PreparedStatement pstmt = connection.prepareStatement(sql)) {
-                pstmt.setString(1, email);
-
-                try (java.sql.ResultSet rs = pstmt.executeQuery()) {
-                    if (rs.next()) {
-                        // 1. Estraiamo i campi COMUNI a tutti gli utenti
-                        Long id = rs.getLong("id");
-                        String name = rs.getString("name");
-                        String dbEmail = rs.getString("email");
-                        String password = rs.getString("password");
-                        it.unifi.ing.chargenet.domain.users.Role role = it.unifi.ing.chargenet.domain.users.Role.valueOf(rs.getString("role"));
-
-                        if (role == it.unifi.ing.chargenet.domain.users.Role.DRIVER) {
-
-                            // Estrazione sicura dei campi Double (gestione dei NULL)
-                            Double lat = rs.getDouble("latitude"); if(rs.wasNull()) lat = null;
-                            Double lon = rs.getDouble("longitude"); if(rs.wasNull()) lon = null;
-                            Double cap = rs.getDouble("battery_capacity"); if(rs.wasNull()) cap = null;
-
-                            // Estrazione Enum
-                            String connTypeStr = rs.getString("connector_type");
-                            var cType = connTypeStr != null ? it.unifi.ing.chargenet.domain.users.ConnectorType.valueOf(connTypeStr) : null;
-
-                            String subPlanStr = rs.getString("subscription_plan");
-                            var sPlan = subPlanStr != null ? it.unifi.ing.chargenet.domain.users.SubscriptionPlan.valueOf(subPlanStr) : null;
-
-                            // Estrazione BigDecimal
-                            java.math.BigDecimal balance = rs.getBigDecimal("wallet_balance");
-                            if (balance == null) balance = java.math.BigDecimal.ZERO;
-
-                            // USO DEL NUOVO METODO RECONSTITUTE PER IL DRIVER
-                            return it.unifi.ing.chargenet.domain.users.Driver.reconstitute(
-                                    id, name, dbEmail, password, lat, lon, cType, sPlan, cap, balance
-                            );
-
-                        } else if (role == it.unifi.ing.chargenet.domain.users.Role.STATION_OPERATOR) {
-
-                            java.math.BigDecimal earnings = rs.getBigDecimal("total_earnings");
-                            if (earnings == null) earnings = java.math.BigDecimal.ZERO;
-
-                            // USO DEL NUOVO METODO RECONSTITUTE PER L'OPERATORE
-                            return it.unifi.ing.chargenet.domain.users.StationOperator.reconstitute(
-                                    id, name, dbEmail, password, earnings
-                            );
-
-                        } else if (role == it.unifi.ing.chargenet.domain.users.Role.ENERGY_MANAGER) {
-
-                            // USO DEL NUOVO METODO RECONSTITUTE PER L'ENERGY MANAGER
-                            return EnergyManager.reconstitute(
-                                    id, name, dbEmail, password
-                            );
-                        }
-                    }
+        String sql = "SELECT * FROM users WHERE email = ?";
+        try (java.sql.PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setString(1, email);
+            try (java.sql.ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return extractUserFromResultSet(rs);
                 }
-            } catch (java.sql.SQLException e) {
-                throw new RuntimeException("Errore durante la ricerca dell'utente per email", e);
             }
-
-            return null;
+        } catch (java.sql.SQLException e) {
+            throw new RuntimeException("Errore durante la ricerca dell'utente per email", e);
         }
+        return null;
+    }
 
     @Override
     public List<User> findByRole(Role role) {

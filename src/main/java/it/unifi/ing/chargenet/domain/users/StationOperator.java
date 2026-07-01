@@ -15,6 +15,7 @@ public class StationOperator  extends User {
 
     public StationOperator(String name, String password, String email) {
         super(name, email, password, Role.STATION_OPERATOR);
+        this.totalEarnings = BigDecimal.ZERO;
     }
 
     public static StationOperator reconstitute(Long id) {

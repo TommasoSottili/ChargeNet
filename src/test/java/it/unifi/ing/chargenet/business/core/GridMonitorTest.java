@@ -9,6 +9,7 @@ import it.unifi.ing.chargenet.domain.infrastructure.ChargingStation;
 import it.unifi.ing.chargenet.domain.infrastructure.PowerTransformer;
 import it.unifi.ing.chargenet.domain.infrastructure.StationStatus;
 import it.unifi.ing.chargenet.domain.sessions.ChargingSession;
+import it.unifi.ing.chargenet.domain.sessions.ChargingType;
 import it.unifi.ing.chargenet.domain.sessions.SessionStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -58,7 +59,7 @@ class GridMonitorTest {
 
         // Prepariamo una sessione attiva associata a quel trasformatore
         ChargingStation mockStation = ChargingStation.reconstitute(10L, null, spyTransformer, "S", null, 0.0, 0.0, null, 50.0, false, null, null, 0.0, 0, StationStatus.ACTIVE, null, null);
-        ChargingSession activeSession = ChargingSession.reconstitute(100L, null, mockStation, "FAST", 20.0, 20.0, 0.0, java.math.BigDecimal.ZERO, SessionStatus.ACTIVE, java.time.LocalDateTime.now(), null);
+        ChargingSession activeSession = ChargingSession.reconstitute(100L, null, mockStation, ChargingType.FAST, 20.0, 20.0, 0.0, java.math.BigDecimal.ZERO, SessionStatus.ACTIVE, java.time.LocalDateTime.now(), null);
 
         List<ChargingSession> activeSessionsList = new ArrayList<>();
         activeSessionsList.add(activeSession);
