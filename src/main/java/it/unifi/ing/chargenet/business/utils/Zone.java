@@ -1,4 +1,4 @@
-package it.unifi.ing.chargenet.presentation.utils;
+package it.unifi.ing.chargenet.business.utils;
 
 public enum Zone {
     CENTRO_STORICO("Centro Storico", 43.7695, 11.2558),

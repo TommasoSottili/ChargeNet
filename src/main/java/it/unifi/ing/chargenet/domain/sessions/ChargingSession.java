@@ -12,7 +12,7 @@ public class ChargingSession {
     private Long id;
     private Driver driver;
     private ChargingStation station;
-    private String strategyUsed;
+    private ChargingType strategyUsed;
     private Double batteryStart;
     private Double batteryCurrent;
     private Double kwhDelivered;
@@ -23,7 +23,7 @@ public class ChargingSession {
 
     protected ChargingSession() {};
 
-    private ChargingSession(Driver driver, ChargingStation station, String strategyUsed, Double batteryStart) {
+    private ChargingSession(Driver driver, ChargingStation station, ChargingType strategyUsed, Double batteryStart) {
         this.driver = driver;
         this.station = station;
         this.strategyUsed = strategyUsed;
@@ -36,7 +36,7 @@ public class ChargingSession {
         this.closedAt = null;
     }
 
-    public static ChargingSession open(Driver driver, ChargingStation station, String strategy, Double batteryStart) {
+    public static ChargingSession open(Driver driver, ChargingStation station, ChargingType strategy, Double batteryStart) {
 
         boolean isAvailable = station.isAvailableFor(driver.getConnectorType()) || station.isReservedBy(driver);
         if (!isAvailable) {
@@ -59,7 +59,7 @@ public class ChargingSession {
     }
 
     public static ChargingSession reconstitute(Long id, Driver driver, ChargingStation station,
-                                                String strategyUsed, Double batteryStart,
+                                                ChargingType strategyUsed, Double batteryStart,
                                                 Double batteryCurrent, Double kwhDelivered,
                                                 BigDecimal costTotal, SessionStatus status,
                                                 LocalDateTime openedAt, LocalDateTime closedAt) {
@@ -117,7 +117,7 @@ public class ChargingSession {
     public Driver getDriver() { return driver; }
     public ChargingStation getStation() { return station; }
 
-    public String getStrategyUsed() { return strategyUsed; }
+    public ChargingType getStrategyUsed() { return strategyUsed; }
 
     public Double getBatteryStart() { return batteryStart; }
 

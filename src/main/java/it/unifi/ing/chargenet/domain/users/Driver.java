@@ -15,14 +15,25 @@ public class Driver extends User {
         super();
     }
 
-    public Driver(Double latitude, Double longitude, ConnectorType connectorType, SubscriptionPlan subscriptionPlan, Double batteryCapacity, String name, String email, String password) {
+    public Driver(String name, String email, String password,
+                  ConnectorType connectorType, Double latitude, Double longitude) {
         super(name, email, password, Role.DRIVER);
+
+        if (connectorType == null) {
+            throw new IllegalArgumentException(
+                    "Il tipo di connettore è obbligatorio per un Driver");
+        }
+        if (latitude == null || longitude == null) {
+            throw new IllegalArgumentException(
+                    "Le coordinate sono obbligatorie per un Driver");
+        }
+
+        this.connectorType = connectorType;
         this.latitude = latitude;
         this.longitude = longitude;
-        this.connectorType = connectorType;
-        this.subscriptionPlan = subscriptionPlan;
-        this.batteryCapacity = batteryCapacity;
+        this.subscriptionPlan = SubscriptionPlan.BASIC;   // default alla registrazione
         this.walletBalance = BigDecimal.ZERO;
+        this.batteryCapacity = 50.0;  // vedi nota sotto su questo campo
     }
 
     public static Driver reconstitute(Long id) {
@@ -74,7 +85,7 @@ public class Driver extends User {
 
     public void charge(BigDecimal amount) {
         if (!hasSufficientBalance(amount)) {
-            throw new InsufficientBalanceException("Saldo insuficiente: impossibile addebitare " + amount + "£");
+            throw new InsufficientBalanceException("Saldo insufficiente: impossibile addebitare " + amount + "€");
         }
         this.walletBalance = this.walletBalance.subtract(amount);
     }
@@ -83,8 +94,11 @@ public class Driver extends User {
         this.walletBalance = this.walletBalance.add(amount);
     }
     public void updatePlan(SubscriptionPlan newPlan) {
+        BigDecimal fee = newPlan.getMonthlyFee();
+        if (fee.compareTo(BigDecimal.ZERO) > 0) {
+            charge(fee);  // riusa la validazione esistente — lancia InsufficientBalanceException se serve
+        }
         this.subscriptionPlan = newPlan;
-        this.walletBalance = this.walletBalance.subtract(newPlan.getMonthlyFee()); // aggiunto questa riga durante l' implementazione del wallet service
     }
 
     /**

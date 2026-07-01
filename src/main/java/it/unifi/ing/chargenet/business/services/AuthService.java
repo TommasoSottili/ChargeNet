@@ -3,11 +3,13 @@ import it.unifi.ing.chargenet.business.exceptions.AuthenticationException;
 import it.unifi.ing.chargenet.business.exceptions.DuplicateEmailException;
 import it.unifi.ing.chargenet.dao.interfaces.UserDao;
 import it.unifi.ing.chargenet.domain.users.*;
- import org.mindrot.jbcrypt.BCrypt;
- import it.unifi.ing.chargenet.dao.interfaces.DaoFactory;
+import it.unifi.ing.chargenet.business.utils.GpsSimulator;
+import org.mindrot.jbcrypt.BCrypt;
+import it.unifi.ing.chargenet.dao.interfaces.DaoFactory;
 import java.sql.Connection;
 import java.sql.SQLException;
 import it.unifi.ing.chargenet.dao.postgres.DatabaseManager;
+
 public class AuthService {
 
     private final DaoFactory daoFactory;
@@ -20,58 +22,77 @@ public class AuthService {
 
     public User register(String name, String email, String password, Role role) {
 
+        if (role == Role.DRIVER) {
+            throw new IllegalArgumentException(
+                    "Usa registerDriver(...) per registrare un Driver: " +
+                            "richiede tipo di connettore e posizione geografica.");
+        }
+
         Connection connection = null;
         try {
-            // Apriamo una connessione "fresca" per questa registrazione
             connection = DatabaseManager.getConnection();
-            connection.setAutoCommit(false); // Inizio transazione
+            connection.setAutoCommit(false);
 
-            // Creiamo il DAO "al volo" usando l'Abstract Factory del collega
             UserDao userDao = daoFactory.createUserDao(connection);
 
-            // Validazione business
             if (userDao.findByEmail(email) != null) {
-                throw new DuplicateEmailException("Impossibile registrarsi: l'email " + email + " è già in uso.");
+                throw new DuplicateEmailException(
+                        "Impossibile registrarsi: l'email " + email + " è già in uso.");
             }
 
-            // Hashing della password
             String hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt());
 
-            // Creazione nuovo utente (i campi extra partono null/default)
-            User newUser;
-            switch (role) {
-                case DRIVER:
-                    newUser = new Driver(null, null, null, null, null, name, email, hashedPassword);
-                    break;
-                case STATION_OPERATOR:
-                    newUser = new StationOperator(name, hashedPassword, email);
-                    break;
-                case ENERGY_MANAGER:
-                    newUser = new EnergyManager(name, hashedPassword, email);
-                    break;
-                default:
-                    throw new IllegalArgumentException("Ruolo non supportato.");
-            }
+            User newUser = switch (role) {
+                case STATION_OPERATOR -> new StationOperator(name, hashedPassword, email);
+                case ENERGY_MANAGER   -> new EnergyManager(name, hashedPassword, email);
+                default -> throw new IllegalArgumentException("Ruolo non supportato: " + role);
+            };
 
-            // Salvataggio tramite DAO
             userDao.save(newUser);
-
-            // Conferma definitiva su Database
             connection.commit();
-            System.out.println("[AuthService] Registrazione completata per: " + email);
-
             return newUser;
 
         } catch (Exception e) {
-            // Se c'è un errore, annulliamo tutto
             rollbackQuietly(connection);
             if (e instanceof DuplicateEmailException) throw (DuplicateEmailException) e;
+            if (e instanceof IllegalArgumentException) throw (IllegalArgumentException) e;
             throw new RuntimeException("Errore critico durante la registrazione", e);
         } finally {
-            // Fondamentale: chiudiamo il "rubinetto" del database
             closeQuietly(connection);
         }
+    }
 
+    public Driver registerDriver(String name, String email, String password,
+                                 ConnectorType connectorType) {
+        Connection connection = null;
+        try {
+            connection = DatabaseManager.getConnection();
+            connection.setAutoCommit(false);
+            UserDao userDao = daoFactory.createUserDao(connection);
+
+            if (userDao.findByEmail(email) != null) {
+                throw new DuplicateEmailException(
+                        "Impossibile registrarsi: l'email " + email + " è già in uso.");
+            }
+
+            String hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt());
+            double[] coords = GpsSimulator.randomPosition();
+
+            Driver newDriver = new Driver(
+                    name, email, hashedPassword, connectorType, coords[0], coords[1]
+            );
+
+            userDao.save(newDriver);
+            connection.commit();
+            return newDriver;
+
+        } catch (Exception e) {
+            rollbackQuietly(connection);
+            if (e instanceof DuplicateEmailException) throw (DuplicateEmailException) e;
+            throw new RuntimeException("Errore critico durante la registrazione del Driver", e);
+        } finally {
+            closeQuietly(connection);
+        }
     }
 
     public User login(String email, String rawPassword) {
@@ -122,5 +143,23 @@ public class AuthService {
     }
     public User getCurrentUser() {
         return currentUser;
+    }
+
+    /**
+     * Ricarica un utente fresco dal DB a partire dall'id.
+     * Serve a evitare di mostrare dati di sessione stantii (es. saldo wallet
+     * dopo una ricarica). Restituisce l'aggregato completamente idratato.
+     */
+    public User refreshUser(Long userId) {
+        Connection connection = null;
+        try {
+            connection = DatabaseManager.getConnection();
+            UserDao userDao = daoFactory.createUserDao(connection);
+            return userDao.findById(userId);
+        } catch (Exception e) {
+            throw new RuntimeException("Errore durante il refresh dell'utente", e);
+        } finally {
+            closeQuietly(connection);
+        }
     }
 }

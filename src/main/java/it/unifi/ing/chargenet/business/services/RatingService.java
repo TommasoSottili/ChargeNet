@@ -169,29 +169,33 @@ public class RatingService {
         Connection connection = null;
         try {
             connection = DatabaseManager.getConnection();
-            connection.setAutoCommit(false); // Inizio transazione
+            connection.setAutoCommit(false);
 
             RatingAlertDao alertDao = daoFactory.createRatingAlertDao(connection);
             StationDao stationDao = daoFactory.createStationDao(connection);
 
-            // 1. LOGICA DI DOMINIO
-            // NOTA: Assicurati che alert.resolve() e station.suspend() esistano nelle tue classi!
-            alert.resolveSuspend(notes);
+            // Idrata la station COMPLETA dal DB: quella dentro l'alert è uno stub
+            // (solo id) e farebbe NPE in stationDao.update (getOperator() == null).
+            ChargingStation station = stationDao.findById(alert.getStation().getId());
+            if (station == null) {
+                throw new IllegalStateException("Stazione dell'alert non trovata: "
+                        + alert.getStation().getId());
+            }
 
-            ChargingStation station = alert.getStation();
+            alert.resolveSuspend(notes);
             station.setSuspended();
 
-            // 2. PERSISTENZA: Aggiorniamo entrambe le entità
             alertDao.update(alert);
             stationDao.update(station);
 
-            // 3. COMMIT: Confermiamo tutto insieme
             connection.commit();
-            System.out.println("[RatingService] Stazione '" + station.getName() + "' sospesa. Alert ID: " + alert.getId());
+            System.out.println("[RatingService] Stazione '" + station.getName()
+                    + "' sospesa. Alert ID: " + alert.getId());
 
         } catch (Exception e) {
             rollbackQuietly(connection);
-            throw new RuntimeException("Errore critico durante la sospensione della stazione: " + e.getMessage(), e);
+            if (e instanceof IllegalStateException) throw (IllegalStateException) e;
+            throw new RuntimeException("Errore critico durante la sospensione: " + e.getMessage(), e);
         } finally {
             closeQuietly(connection);
         }

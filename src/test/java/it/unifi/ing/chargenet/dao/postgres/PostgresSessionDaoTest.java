@@ -1,6 +1,7 @@
 package it.unifi.ing.chargenet.dao.postgres;
 
 import it.unifi.ing.chargenet.domain.sessions.ChargingSession;
+import it.unifi.ing.chargenet.domain.sessions.ChargingType;
 import it.unifi.ing.chargenet.domain.sessions.SessionStatus;
 import it.unifi.ing.chargenet.domain.infrastructure.ChargingStation;
 import it.unifi.ing.chargenet.domain.users.Driver;
@@ -79,7 +80,7 @@ class PostgresSessionDaoTest {
                 null,                  // 1. id (Generato dal DB)
                 proxyDriver,           // 2. driver
                 proxyStation,          // 3. station
-                "FAST",                // 4. strategyUsed
+                ChargingType.FAST,                // 4. strategyUsed
                 20.0,                  // 5. batteryStart (es. 20%)
                 20.0,                  // 6. batteryCurrent
                 0.0,                   // 7. kwhDelivered
@@ -103,7 +104,7 @@ class PostgresSessionDaoTest {
         ChargingSession retrieved = sessionDao.findById(session.getId());
         assertNotNull(retrieved);
         assertEquals(0.0, retrieved.getKwhDelivered());
-        assertEquals("FAST", retrieved.getStrategyUsed());
+        assertEquals(ChargingType.FAST, retrieved.getStrategyUsed());
         assertNull(retrieved.getClosedAt(), "La sessione non dovrebbe avere orario di fine");
         assertNotNull(retrieved.getDriver());
         assertEquals(2L, retrieved.getDriver().getId());
@@ -157,7 +158,7 @@ class PostgresSessionDaoTest {
     void testFindActiveSessionByStation() {
         ChargingSession completed = ChargingSession.reconstitute(
                 null, Driver.reconstitute(2L), ChargingStation.reconstitute(1L),
-                "ECO", 10.0, 100.0, 20.0, new BigDecimal("10.00"),
+                ChargingType.ECO, 10.0, 100.0, 20.0, new BigDecimal("10.00"),
                 SessionStatus.COMPLETED,
                 LocalDateTime.now().minusHours(5), LocalDateTime.now().minusHours(4)
         );
@@ -203,7 +204,7 @@ class PostgresSessionDaoTest {
                 null,
                 Driver.reconstitute(2L),
                 ChargingStation.reconstitute(1L),
-                "ECO",
+                ChargingType.ECO,
                 20.0,
                 80.0,
                 30.0,
@@ -248,13 +249,13 @@ class PostgresSessionDaoTest {
     void testFindCompletedByDriverId() {
         ChargingSession completed1 = ChargingSession.reconstitute(
                 null, Driver.reconstitute(2L), ChargingStation.reconstitute(1L),
-                "ECO", 20.0, 80.0, 30.0, new BigDecimal("12.00"),
+                ChargingType.ECO, 20.0, 80.0, 30.0, new BigDecimal("12.00"),
                 SessionStatus.COMPLETED,
                 LocalDateTime.now().minusHours(3), LocalDateTime.now().minusHours(2)
         );
         ChargingSession completed2 = ChargingSession.reconstitute(
                 null, Driver.reconstitute(2L), ChargingStation.reconstitute(1L),
-                "FAST", 20.0, 80.0, 40.0, new BigDecimal("18.00"),
+                ChargingType.FAST, 20.0, 80.0, 40.0, new BigDecimal("18.00"),
                 SessionStatus.COMPLETED,
                 LocalDateTime.now().minusHours(5), LocalDateTime.now().minusHours(4)
         );
@@ -290,13 +291,13 @@ class PostgresSessionDaoTest {
         // Creiamo sessioni con dati di energia precisi per la Stazione 1 (Operatore 1)
         ChargingSession completed1 = ChargingSession.reconstitute(
                 null, Driver.reconstitute(2L), ChargingStation.reconstitute(1L),
-                "FAST", 10.0, 80.0, 50.5, new BigDecimal("20.00"), // Erogati 50.5 kWh
+                ChargingType.FAST, 10.0, 80.0, 50.5, new BigDecimal("20.00"), // Erogati 50.5 kWh
                 SessionStatus.COMPLETED,
                 LocalDateTime.now().minusHours(3), LocalDateTime.now().minusHours(2)
         );
         ChargingSession completed2 = ChargingSession.reconstitute(
                 null, Driver.reconstitute(2L), ChargingStation.reconstitute(1L),
-                "ECO", 50.0, 100.0, 20.0, new BigDecimal("8.00"), // Erogati 20.0 kWh
+                ChargingType.ECO, 50.0, 100.0, 20.0, new BigDecimal("8.00"), // Erogati 20.0 kWh
                 SessionStatus.COMPLETED,
                 LocalDateTime.now().minusHours(6), LocalDateTime.now().minusHours(4)
         );

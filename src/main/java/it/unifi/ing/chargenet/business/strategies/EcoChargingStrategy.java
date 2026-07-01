@@ -3,6 +3,7 @@ package it.unifi.ing.chargenet.business.strategies;
 import it.unifi.ing.chargenet.domain.infrastructure.ChargingStation;
 import it.unifi.ing.chargenet.domain.users.Driver;
 import it.unifi.ing.chargenet.domain.users.SubscriptionPlan;
+import it.unifi.ing.chargenet.domain.sessions.ChargingType;
 
 public class EcoChargingStrategy implements ChargingStrategy {
 
@@ -31,7 +32,7 @@ public class EcoChargingStrategy implements ChargingStrategy {
     }
 
     @Override
-    public String getName() {
-        return "ECO";
+    public ChargingType getType() {
+        return ChargingType.ECO;
     }
 }
