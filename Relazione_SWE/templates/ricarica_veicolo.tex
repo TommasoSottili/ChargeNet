@@ -1,0 +1,58 @@
+\begin{xltabular}{\textwidth}{| >{\bfseries}l | X |}
+
+% --- INTESTAZIONE PRIMA PAGINA ---
+\caption{Caso d'Uso: Ricarica Veicolo} \label{tab:uc_ricarica} \\
+\hline
+\rowcolor{gray!15} Campo & \textbf{Contenuto} \\ \hline
+\endfirsthead
+
+% --- INTESTAZIONE PAGINE SUCCESSIVE ---
+\multicolumn{2}{c}{{\tablename\ \thetable{} -- Continua dalla pagina precedente}} \\
+\hline
+\rowcolor{gray!15} Campo & \textbf{Contenuto} \\ \hline
+\endhead
+
+% --- PIÈ DI PAGINA (se si spezza) ---
+\hline
+\multicolumn{2}{r}{\textit{Continua nella pagina successiva...}} \\
+\endfoot
+
+% --- PIÈ DI PAGINA FINALE ---
+\endlastfoot
+
+% --- CONTENUTO ---
+Nome & Ricarica Veicolo (Charge Vehicle) \\ \hline
+Livello & Obiettivo Utente (User Goal) \\ \hline
+Descrizione & Il Conducente avvia una sessione di ricarica su una stazione selezionata, scegliendo una specifica strategia di ricarica (Fast o Eco). La sessione viene eseguita in tempo reale: il Grid Monitor la fa avanzare e l'interfaccia utente (Live Session UI) ne osserva lo stato tramite polling. \\ \hline
+Pre-condizioni & \parbox[t]{\linewidth}{%
+Il Conducente ha effettuato l'accesso.\\
+Il saldo del Portafoglio (Wallet) del Conducente copre almeno il costo di 5 kWh presso la stazione selezionata, calcolato per il piano del Conducente (\texttt{station.priceFor(5.0, driver)}) e la strategia selezionata.\\
+La stazione selezionata è \texttt{ACTIVE} (oppure \texttt{RESERVED} dal Conducente) ed è compatibile con il connettore del veicolo.
+} \\ \hline
+Post-condizioni & La sessione è \texttt{COMPLETED}, il costo (detratto in modo incrementale per ogni tick durante la ricarica) è interamente addebitato sul Portafoglio, viene registrata una Transazione di tipo \texttt{CHARGE} e la stazione torna allo stato \texttt{ACTIVE}. \\ \hline
+Attori & Conducente, Grid Monitor (Sistema) \\ \hline
+Unit Test & \texttt{SessionServiceTest} \\ \hline
+Flusso Principale & 
+\begin{enumerate}[leftmargin=*, nosep]
+    \item Il Conducente seleziona una stazione dalla lista delle stazioni disponibili e compatibili più vicine (\texttt{ACTIVE}, o \texttt{RESERVED} da lui stesso).
+    \item Il Conducente apre la Live Session per quella stazione.
+    \item Il Conducente sceglie una strategia di ricarica: Fast Charge o Eco Charge.
+    \item Il Conducente inserisce la percentuale di batteria attuale del veicolo.
+    \item Il Conducente preme Start; il sistema valida il saldo del Portafoglio e la disponibilità della stazione, imposta la stazione su \texttt{BUSY} e apre la sessione.
+    \item Il Grid Monitor, ogni 5s, aggiorna batteria e kWh erogati, accumula il calore sul trasformatore di alimentazione e deduce i fondi in base alla strategia (lo sconto del piano si applica solo alla quota tariffaria della piattaforma).
+    \item La Live Session UI interroga (poll) lo stato della sessione e riflette in tempo reale batteria, kWh, costo attuale e Portafoglio.
+    \item Il Conducente preme Stop (oppure la sessione si auto-completa quando la batteria raggiunge il 100\%).
+    \item Il sistema calcola i kWh totali erogati, il costo finale e registra la Transazione.
+    \item Il sistema reimposta lo stato della stazione su \texttt{ACTIVE} e mostra il popup di valutazione (rating).
+\end{enumerate} \\ \hline
+Flussi Alternativi & 
+\textbf{1. Stazioni non disponibili nascoste:} \newline
+1.1. Le stazioni \texttt{BUSY}, \texttt{OVERLOADED}, incompatibili o \texttt{RESERVED} da altri non sono mostrate in lista, impedendo al Conducente di selezionare una stazione non disponibile. \newline\newline
+\textbf{5. Saldo insufficiente:} \newline
+5.1. Se il saldo è inferiore al costo di 5 kWh, il sistema nega l'avvio e mostra: "Credito insufficiente per avviare la sessione." (\texttt{InsufficientBalanceException}). \newline\newline
+\textbf{6-7. Allarme Termico (Observer attivato):} \newline
+6.1. Se la temperatura del trasformatore supera i 90°C, il \texttt{LoadBalancerService} (Observer) imposta tutte le stazioni su quel trasformatore su \texttt{OVERLOADED} e chiude forzatamente le relative sessioni attive. \newline
+6.2. La sessione diventa \texttt{INTERRUPTED\_THERMAL} e la UI mostra: "Arresto di emergenza: surriscaldamento del sistema". \newline
+6.3. Il sistema elabora un rimborso automatico per i kWh pagati ma non erogati. \\ \hline
+
+\end{xltabular}

@@ -1,0 +1,86 @@
+\documentclass[12pt,a4paper]{report}
+
+\usepackage[utf8]{inputenc}
+\usepackage[italian]{babel}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{graphicx}
+\graphicspath{{Images/}}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{xltabular}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage[table]{xcolor}
+\usepackage{float}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{red},
+    showstringspaces=false,
+    breaklines=true,
+    frame=single,
+    rulecolor=\color{black!30}
+}
+\begin{document}
+
+\begin{titlepage}
+    \centering
+    
+    % LOGO
+    \includegraphics[width=0.4\textwidth]{logo_unifi.png}\par
+    \vspace{0.5cm}
+    
+    % INTESTAZIONE
+    {\Large \textsc{Università degli Studi di Firenze} \par}
+    {\large Scuola di Ingegneria \par}
+    {\small Corso di Laurea in Ingegneria Informatica \par}
+    \vspace{1.5cm}
+    
+    % TITOLO
+    \rule{\linewidth}{0.3mm} \par
+    \vspace{0.8cm}
+    {\huge \textbf{ChargeNet} \par}
+    \vspace{0.3cm}
+    {\Large \textit{Piattaforma per la gestione di stazioni di ricarica EV} \par}
+    \vspace{0.6cm}
+    \rule{\linewidth}{0.3mm} \par
+    \vspace{1.5cm}
+    
+    \begin{minipage}[t]{0.45\textwidth}
+        \begin{flushleft} \large
+            \textbf{Candidati:}\\
+            Tommaso Sottili 7138541\\
+            Luca Moracci 7140812\\
+            Marco Lampronti 7147400
+        \end{flushleft}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.45\textwidth}
+        \begin{flushright} \large
+            \textbf{Corso:}\\
+            Ingegneria del software\\
+            \textbf{Docente:}\\
+            Prof. Enrico Vicario
+        \end{flushright}
+    \end{minipage} 
+    
+    \vfill 
+    
+    {\large Anno Accademico 2025/2026 \par}
+    
+\end{titlepage} 
+
+% INDICE 
+\tableofcontents
+\clearpage
+
+\input{capitoli/1_introduzione}
+\input{capitoli/2_progettazione}
+\input{capitoli/3_implementazione}
+\input{capitoli/4_testing}
+\input{capitoli/5_demo}
+
+\end{document}

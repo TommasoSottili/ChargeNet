@@ -1,0 +1,38 @@
+\begin{table}[htbp]
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{\textwidth}{| >{\bfseries}l | X |}
+\hline
+\rowcolor{gray!15} Campo & \textbf{Contenuto} \\ \hline
+Nome & Prenotazione a Breve Termine (Short-Term Hold) \\ \hline
+Livello & Obiettivo Utente (User Goal) \\ \hline
+Descrizione & Il Conducente prenota temporaneamente una stazione di ricarica \texttt{ACTIVE} per 15 minuti per assicurarne la disponibilità al suo arrivo fisico. \\ \hline
+Pre-condizioni & 
+\begin{itemize}[leftmargin=*, nosep]
+    \item Il Conducente ha effettuato l'accesso.
+    \item Il Conducente non ha già un'altra prenotazione attiva.
+    \item La stazione di destinazione è \texttt{ACTIVE} ed è compatibile con il connettore del Conducente.
+\end{itemize} \\ \hline
+Post-condizioni & Lo stato della stazione viene modificato in \texttt{RESERVED}, \texttt{reserved\_by\_id} viene impostato sul Conducente e \texttt{expiration\_timestamp} viene impostato all'orario attuale più 15 minuti. La stazione prenotata rimane visibile al Conducente che ha effettuato la prenotazione (contrassegnata come \texttt{RESERVED}) e viene nascosta a tutti gli altri Conducenti. \\ \hline
+Attori & Conducente \\ \hline
+Unit Test & \texttt{StationServiceTest} \\ \hline
+Flusso Principale & 
+\begin{enumerate}[leftmargin=*, nosep]
+    \item Il Conducente seleziona una stazione \texttt{ACTIVE} dalla lista delle stazioni disponibili.
+    \item Il Conducente preme Smart Book per confermare la prenotazione.
+    \item Il sistema verifica che la stazione sia ancora \texttt{ACTIVE} (controllo di concorrenza).
+    \item Il sistema imposta lo stato della stazione su \texttt{RESERVED} e \texttt{reserved\_by\_id} sul Conducente.
+    \item Il sistema imposta \texttt{expiration\_timestamp} all'orario attuale più 15 minuti.
+    \item Il sistema mostra un messaggio di successo; la stazione appare ora come \texttt{RESERVED} nella lista del Conducente, offrendo solo l'opzione Charge Now.
+\end{enumerate} \\ \hline
+Flussi Alternativi & 
+\textbf{3. Stazione non disponibile (Conflitto di concorrenza):} \newline
+3.1. Se la stazione è stata prenotata o occupata da un altro utente nel frattempo, il sistema nega la prenotazione. \newline
+3.2. Il sistema mostra il messaggio: "Stazione non più disponibile". \newline
+3.3. Ritorno al passo 1. \newline\newline
+\textbf{Nota sulla Scadenza:} \newline
+\textbullet\ Se trascorrono i 15 minuti senza che il Conducente avvii una sessione, il Grid Monitor ripristina automaticamente la stazione su \texttt{ACTIVE} (gestito dal caso d'uso Expire Short-Term Holds). \\ \hline
+\end{tabularx}
+\caption{Caso d'Uso: Prenotazione a Breve Termine}
+\label{tab:uc_prenotazione}
+\end{table}

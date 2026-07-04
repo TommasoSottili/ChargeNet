@@ -1,0 +1,34 @@
+\chapter{Introduzione}
+
+
+\section{Descrizione}
+Il progetto \textbf{ChargeNet} è un sistema software pensato per la gestione di una rete di stazioni di ricarica per veicoli elettrici (EV). L'idea alla base dell'applicazione è quella di coordinare tutto ciò che ruota attorno a una sessione di ricarica: dall'aiutare l'utente a trovare una colonnina libera, fino alla gestione del pagamento, assicurandosi allo stesso tempo che l'infrastruttura elettrica non subisca danni.
+
+Per raggiungere questo obiettivo, la piattaforma fa da punto di incontro per tre specifiche figure, fornendo a ciascuna le funzionalità necessarie:
+
+\begin{itemize}
+    \item \textbf{Driver:} È l'utente finale. Utilizza il sistema per cercare le stazioni compatibili con la sua auto, far partire e monitorare la ricarica, e gestire i pagamenti tramite un portafoglio virtuale interno (wallet).
+    
+    \item \textbf{Station Operator:} È l'addetto alla manutenzione fisica. Il suo compito è controllare lo stato di salute delle colonnine: se una stazione si guasta, può metterla temporaneamente fuori servizio per evitare disagi ai Driver, e registrarla di nuovo come attiva una volta riparata.
+    
+    \item \textbf{Energy Manager:} È il tecnico supervisore della rete elettrica. Controlla in tempo reale il carico sui trasformatori per evitare surriscaldamenti. Se la rete è sotto stress, ha gli strumenti per abbassare la potenza erogata o limitare le ricariche (Load Balancing) in modo da proteggere l'infrastruttura.
+\end{itemize}
+
+\section{Stack Tecnologico}
+Per lo sviluppo è stato scelto un ecosistema Java-centrico, privilegiando 
+la robustezza e la portabilità:
+
+\begin{itemize}
+    \item \textbf{Linguaggio:} Java 21.
+    \item \textbf{Interfaccia Grafica:} JavaFX 21, per una gestione 
+    reattiva delle dashboard dei vari attori.
+    \item \textbf{Persistenza:} PostgreSQL, gestito tramite JDBC per un 
+    controllo granulare delle transazioni.
+    \item \textbf{Build Tool:} Maven, per la gestione delle dipendenze e 
+    del ciclo di vita del software.
+\end{itemize}
+
+\section{Astrazione dell'Infrastruttura Fisica}
+Trattandosi di un progetto universitario, l'applicazione non comunica con colonnine e trasformatori reali. Nel mondo reale, infatti, interfacciarsi con l'hardware fisico è un'operazione che porta con sé diverse complicazioni: bisogna gestire le differenze tra i vari produttori, adattarsi a protocolli di rete specifici e gestire i fisiologici ritardi o cadute di connessione dei sensori.
+
+L'architettura del sistema è stata comunque pensata per un'eventuale integrazione futura. Per le finalità di questo progetto, i dati sui consumi e sullo stato delle stazioni vengono semplicemente simulati da un componente interno al programma (\textit{GridMonitor}). 

@@ -1,0 +1,47 @@
+\chapter{Analisi dei Requisiti e Casi d'uso}
+
+Questo capitolo descrive il processo di progettazione del sistema, seguendo un approccio che va dall'esterno verso l'interno. Si parte dall'analisi di come gli utenti interagiscono con l'applicazione, definendo i requisiti e l'interfaccia grafica, per poi scendere progressivamente nei dettagli tecnici dell'architettura software e della struttura del database.
+
+\section{Use Case Diagram}
+Il diagramma dei casi d'uso offre una visione d'insieme delle funzionalità del sistema. Serve a mappare visivamente quali azioni possono compiere i tre attori principali (Driver, Station Operator ed Energy Manager) all'interno della piattaforma.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{UseCaseDiagramNew.pdf.drawio.pdf}
+    \caption{Diagramma dei casi d'uso}
+    \label{fig:mio_schema}
+\end{figure}
+
+\section{Use Case Templates}
+Per evitare ambiguità, i casi d'uso più importanti sono stati documentati nel dettaglio attraverso dei template strutturati. Questi schemi descrivono passo dopo passo il flusso degli eventi, le precondizioni necessarie e i possibili scenari di errore.
+\begingroup
+\renewcommand{\arraystretch}{1.4}
+\input{templates/ricarica_veicolo.tex} 
+\endgroup
+
+\begingroup
+\renewcommand{\arraystretch}{1.4}
+\input{templates/prenotazione_short_term.tex} 
+\endgroup
+
+\section{Mockups}
+In questa fase sono stati realizzati i mockup dell'interfaccia grafica per verificare la User Experience e garantire
+che tutte le funzionalità descritte nei casi d'uso siano accessibili in modo immediato ed intuitivo.
+
+\section{Page Navigation Diagram}
+Il diagramma di navigazione illustra in che modo le diverse schermate dell'applicazione sono collegate tra loro. Mostra il percorso che l'utente compie muovendosi all'interno del sistema in base alle scelte effettuate o ai pulsanti premuti.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{NavigationPageDiagram.drawio2.pdf}
+    \caption{Diagramma di navigazione tra le pagine dell'applicazione.}
+    \label{fig:navigation_schema}
+\end{figure}
+
+\section{Package Diagram}
+Passando all'architettura interna del software, il diagramma dei pacchetti mostra come il codice è stato diviso in moduli logici (come ad esempio la logica di business, l'interfaccia e l'accesso ai dati). L'obiettivo è mantenere il progetto ordinato e limitare le dipendenze tra i vari componenti.
+
+\section{Class Diagram}
+Il sistema è stato progettato con un'architettura a strati per mantenere alta coesione e basso accoppiamento (\textit{high coesion and low coupling}). Nel seguente paragrafo sono approfondite le classi principali: 
+\section{ER Diagram e Modello Relazionale}
+L'ultimo passo della progettazione riguarda la persistenza dei dati. In questa sezione viene presentato lo schema Entità-Relazione (ER) del database e la sua successiva traduzione nel modello relazionale a tabelle, pronto per l'implementazione su PostgreSQL.
