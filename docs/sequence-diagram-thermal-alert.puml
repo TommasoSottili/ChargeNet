@@ -1,0 +1,44 @@
+@startuml Thermal_Alert
+title Thermal Alert — Observer + due fasi con transazioni DIVERSE
+
+participant "GridMonitor" as GM
+participant "PowerTransformer\n«Subject»" as PT
+participant "LoadBalancerService\n«Observer»" as LB
+participant "GridCluster" as GC
+participant "StationDao" as SD
+participant "SessionService" as SS
+database "DB" as DB
+
+GM -> PT : simulateTick(calore)
+PT -> PT : temperatura += calore
+
+alt temperatura > 90°C
+    PT -> LB : update(this, THERMAL_ALERT)
+    note right of PT
+        Il Transformer conosce solo l'interfaccia Observer:
+        non sa che ci saranno OVERLOADED né rimborsi.
+        Nuovo reattore = nuovo Observer, zero modifiche qui.
+    end note
+    LB -> GC : getStationsForTransformer(id)
+
+    == FASE 1 — OVERLOADED (UN'UNICA transazione atomica) ==
+    LB -> DB : getConnection(); setAutoCommit(false)
+    loop per ogni colonnina del ramo
+        LB -> LB : station.setOverloaded()
+        LB -> SD : update(station)
+    end
+    LB -> DB : commit()   ' tutte OVERLOADED insieme, o rollback
+    LB -> DB : close()
+
+    == FASE 2 — rimborsi (transazioni INDIPENDENTI, una per sessione) ==
+    LB -> SS : getActiveSessions()
+    loop per ogni sessione appartenente al ramo
+        LB -> SS : forceClose(session)
+        note right of SS
+            OGNI forceClose apre e committa la PROPRIA transazione:
+            refund ultimo tick + addEarnings operatore + stati.
+            NON è un'unica transazione globale sui rimborsi.
+        end note
+    end
+end
+@enduml

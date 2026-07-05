@@ -1,0 +1,52 @@
+@startuml GridMonitor_Lifecycle
+title GridMonitor — ciclo di simulazione («extends Thread», daemon, tick ogni 5s)
+
+participant "GridMonitor\n«daemon thread»" as GM
+participant "StationService" as STS
+participant "SessionService" as SS
+participant "ChargingStrategy\n«Strategy»" as ST
+participant "GridCluster\n«Singleton»" as GC
+participant "PowerTransformer\n«Subject»" as PT
+participant "RatingService" as RS
+
+loop while (!isInterrupted())  —  sleep(5000) → onTick()
+    == 1. rilascio prenotazioni scadute ==
+    GM -> STS : expireHolds()
+
+    == 2. sessioni attive: addTick + mappa calore ==
+    GM -> GC : getTransformers()
+    GM -> SS : getActiveSessions()
+    SS --> GM : List<ChargingSession>
+    loop per ogni sessione attiva
+        GM -> ST : fromEnum(session.getStrategyUsed())
+        GM -> SS : addTick(session, strategy)
+        note right of SS
+            Dentro addTick: kWh del tick = powerKw × (5/3600),
+            costo = strategy.calculateCost(...), driver.charge(costo),
+            UPDATE users + charging_sessions in transazione.
+            Poi: se wallet ≤ 0 → forceClose; se batteria piena → closeSession.
+        end note
+        GM -> ST : getHeatIncrement()
+        GM -> GM : heatMap[transformer] += calore
+    end
+
+    == 3. applica calore ai trasformatori ==
+    loop per ogni trasformatore
+        GM -> PT : simulateTick(caloreTotale)
+        note right of PT
+            temperatura += calore; ricalcola loadPercent.
+            Se temp > 90°C → notifyObservers(THERMAL_ALERT)
+            → vedi diagramma "Thermal Alert".
+        end note
+    end
+
+    == 4. controllo qualità ==
+    GM -> RS : checkRatingAlerts()
+end
+
+note over GM
+    La UI NON è osservatore di questo flusso: la LiveSession
+    fa polling separato (Timeline 1s) sul DB. Due loop concorrenti,
+    unico punto di contatto il database.
+end note
+@enduml
