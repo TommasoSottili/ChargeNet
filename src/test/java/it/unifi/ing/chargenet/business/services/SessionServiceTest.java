@@ -12,9 +12,12 @@ import it.unifi.ing.chargenet.domain.users.ConnectorType;
 import it.unifi.ing.chargenet.domain.users.Driver;
 import it.unifi.ing.chargenet.domain.users.SubscriptionPlan;
 import it.unifi.ing.chargenet.domain.users.StationOperator;
+import it.unifi.ing.chargenet.domain.users.InsufficientBalanceException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 
 import java.math.BigDecimal;
@@ -79,22 +82,31 @@ class SessionServiceTest {
     // =========================================================================
 
     @Test
+    @DisplayName("Apertura sessione con fondi insufficienti lancia eccezione")
     void testOpenSession_InsufficientFunds_ThrowsException() {
+        // Driver con saldo ZERO (testDriver lo inizializza a BigDecimal.ZERO)
         Driver poorDriver = testDriver(1L, "Povero", "p@test.com", SubscriptionPlan.BASIC);
-        ChargingStation station = ChargingStation.reconstitute(1L, null, null, "Stazione", null, 0.0, 0.0, ConnectorType.TYPE_2, 50.0, false, null, null, 0.0, 0, StationStatus.ACTIVE, null, null);
 
-        ChargingStrategy strategyMock = mock(ChargingStrategy.class);
-        doReturn(5.0).when(strategyMock).calculateCost(anyDouble(), eq(station), eq(poorDriver));
+        // Stazione con tariffa REALE, così priceFor produce un minimo > 0
+        ChargingStation station = ChargingStation.reconstitute(
+                1L, null, null, "Stazione", null, 43.77, 11.25, ConnectorType.TYPE_2,
+                50.0, false, new BigDecimal("0.40"), new BigDecimal("0.05"), 0.0, 0,
+                StationStatus.ACTIVE, null, null);
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
-                sessionService.openSession(poorDriver, station, strategyMock, 20.0)
+        ChargingStrategy strategy = ChargingStrategy.fromEnum(ChargingType.FAST);
+
+        // La validazione ora vive nel dominio → InsufficientBalanceException
+        InsufficientBalanceException ex = assertThrows(InsufficientBalanceException.class, () ->
+                sessionService.openSession(poorDriver, station, strategy, 20.0)
         );
+        assertTrue(ex.getMessage().contains("insufficiente"));
 
-        assertEquals("Saldo insufficiente: sono necessari fondi per almeno 5 kWh.", exception.getMessage());
+        // Il fallimento avviene PRIMA di toccare il DB
         verify(daoFactoryMock, never()).createSessionDao(any());
     }
 
     @Test
+    @DisplayName("Apertura sessione con saldo sufficiente ha successo")
     void testOpenSession_Success() throws Exception {
         Driver richDriver = testDriver(2L, "Ricco", "r@test.com", SubscriptionPlan.PREMIUM);
         richDriver.refund(new BigDecimal("100.00"));
@@ -117,6 +129,7 @@ class SessionServiceTest {
     }
 
     @Test
+    @DisplayName("Chiusura sessione completata con successo")
     void testCloseSession_Success() throws Exception {
         Driver driver = testDriver(3L, "Test", "t@test.com", SubscriptionPlan.BASIC);
 
@@ -137,11 +150,17 @@ class SessionServiceTest {
     }
 
     @Test
+    @DisplayName("Chiusura forzata con rimborso al driver")
     void testForceClose_WithRefund() throws Exception {
         Driver driver = testDriver(4L, "Test", "t@test.com", SubscriptionPlan.BASIC);
         driver.refund(new BigDecimal("50.00"));
 
-        ChargingStation station = ChargingStation.reconstitute(1L, null, null, "Stazione", null, 0.0, 0.0, ConnectorType.TYPE_2, 50.0, false, BigDecimal.ZERO, BigDecimal.ZERO, 0.0, 0, StationStatus.ACTIVE, null, null);
+        // Tariffe REALI: priceFor le dereferenzia sia in open() sia nel calcolo rimborso di forceClose.
+        ChargingStation station = ChargingStation.reconstitute(
+                1L, null, null, "Stazione", null, 0.0, 0.0, ConnectorType.TYPE_2,
+                50.0, false, new BigDecimal("0.30"), new BigDecimal("0.10"), 0.0, 0,
+                StationStatus.ACTIVE, null, null);
+
         ChargingSession session = ChargingSession.open(driver, station, ChargingType.FAST, 20.0);
 
         sessionService.forceClose(session);
@@ -154,10 +173,11 @@ class SessionServiceTest {
     }
 
     // =========================================================================
-    // --- 3. TEST: GET ACTIVE SESSIONS ---
+    // --- 2. TEST: GET ACTIVE SESSIONS ---
     // =========================================================================
 
     @Test
+    @DisplayName("Recupero delle sessioni attive")
     void testGetActiveSessions() throws Exception {
         ChargingSession dummySession = mock(ChargingSession.class);
         List<ChargingSession> mockList = Collections.singletonList(dummySession);
@@ -172,12 +192,11 @@ class SessionServiceTest {
     }
 
     // =========================================================================
-    // --- 4. TEST: METODI DI LETTURA E AGGREGAZIONE (Use Cases UI) ---
-    // --- Invariati: usano mock(Driver.class) / mock(StationOperator.class),
-    // --- non costruiscono mai un Driver reale, quindi non erano toccati.
+    // --- 3. TEST: METODI DI LETTURA E AGGREGAZIONE (Use Cases UI) ---
     // =========================================================================
 
     @Test
+    @DisplayName("Conteggio sessioni per operatore")
     void testCountSessionsByOperator_Success() throws Exception {
         StationOperator mockOperator = mock(StationOperator.class);
         doReturn(10L).when(mockOperator).getId();
@@ -191,6 +210,7 @@ class SessionServiceTest {
     }
 
     @Test
+    @DisplayName("Conteggio sessioni con operatore nullo lancia eccezione")
     void testCountSessionsByOperator_NullOperator() {
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
                 sessionService.countSessionsByOperator(null)
@@ -199,6 +219,7 @@ class SessionServiceTest {
     }
 
     @Test
+    @DisplayName("Calcolo energia totale venduta per operatore")
     void testCalculateTotalEnergySoldByOperator_Success() throws Exception {
         StationOperator mockOperator = mock(StationOperator.class);
         doReturn(15L).when(mockOperator).getId();
@@ -212,6 +233,7 @@ class SessionServiceTest {
     }
 
     @Test
+    @DisplayName("Calcolo energia venduta con operatore nullo lancia eccezione")
     void testCalculateTotalEnergySoldByOperator_NullOperator() {
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
                 sessionService.calculateTotalEnergySoldByOperator(null)
@@ -220,6 +242,7 @@ class SessionServiceTest {
     }
 
     @Test
+    @DisplayName("Recupero storico sessioni completate di un driver")
     void testGetSessionHistoryByDriver_Success() throws Exception {
         Driver mockDriver = mock(Driver.class);
         doReturn(5L).when(mockDriver).getId();
@@ -239,6 +262,7 @@ class SessionServiceTest {
     }
 
     @Test
+    @DisplayName("Recupero storico con driver nullo lancia eccezione")
     void testGetSessionHistoryByDriver_NullDriver() {
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
                 sessionService.getSessionHistoryByDriver(null)
@@ -247,6 +271,7 @@ class SessionServiceTest {
     }
 
     @Test
+    @DisplayName("Recupero sessione attiva di un driver: restituisce la sessione")
     void testGetActiveSessionForDriver_ReturnsSession() throws Exception {
         Driver mockDriver = mock(Driver.class);
         doReturn(8L).when(mockDriver).getId();
@@ -263,6 +288,7 @@ class SessionServiceTest {
     }
 
     @Test
+    @DisplayName("Recupero sessione attiva di un driver: nessuna sessione")
     void testGetActiveSessionForDriver_ReturnsNull() throws Exception {
         Driver mockDriver = mock(Driver.class);
         doReturn(9L).when(mockDriver).getId();
@@ -276,10 +302,121 @@ class SessionServiceTest {
     }
 
     @Test
+    @DisplayName("Recupero sessione attiva con driver nullo lancia eccezione")
     void testGetActiveSessionForDriver_NullDriver() {
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
                 sessionService.getActiveSessionForDriver(null)
         );
         assertEquals("Il driver non può essere nullo.", exception.getMessage());
+    }
+
+    // =========================================================================
+    // --- 4. TEST: getSessionById ---
+    // =========================================================================
+
+    @Test
+    @DisplayName("Recupero di una sessione tramite ID")
+    void testGetSessionById_Success() throws Exception {
+        ChargingSession mockSession = mock(ChargingSession.class);
+        doReturn(mockSession).when(sessionDaoMock).findById(42L);
+
+        ChargingSession result = sessionService.getSessionById(42L);
+
+        assertNotNull(result);
+        assertSame(mockSession, result);
+        verify(sessionDaoMock, times(1)).findById(42L);
+        verify(connectionMock, times(1)).close();
+    }
+
+    @Test
+    @DisplayName("Recupero tramite ID inesistente restituisce null")
+    void testGetSessionById_NotFound() throws Exception {
+        doReturn(null).when(sessionDaoMock).findById(999L);
+
+        ChargingSession result = sessionService.getSessionById(999L);
+
+        assertNull(result);
+        verify(sessionDaoMock, times(1)).findById(999L);
+        verify(connectionMock, times(1)).close();
+    }
+
+    // =========================================================================
+    // --- 5. TEST: ACCREDITO GUADAGNI OPERATORE ---
+    // =========================================================================
+
+    @Test
+    @DisplayName("Chiusura sessione: accredito della quota all'operatore")
+    void testCloseSession_CreditsOperator() throws Exception {
+        Driver driver = testDriver(3L, "Test", "t@test.com", SubscriptionPlan.BASIC);
+        driver.refund(new BigDecimal("50.00"));   // ← fondi, altrimenti open() rifiuta
+
+        StationOperator operatorStub = StationOperator.reconstitute(99L);
+        ChargingStation station = ChargingStation.reconstitute(
+                1L, operatorStub, null, "Stazione", null, 0.0, 0.0, ConnectorType.TYPE_2,
+                50.0, false, new BigDecimal("0.30"), new BigDecimal("0.10"), 0.0, 0,
+                StationStatus.ACTIVE, null, null);
+
+        ChargingSession session = ChargingSession.open(driver, station, ChargingType.FAST, 20.0);
+        session.addTick(10.0, new BigDecimal("5.00"));   // kWh erogati = 10.0
+
+        StationOperator fullOperator = mock(StationOperator.class);
+        doReturn(fullOperator).when(userDaoMock).findById(99L);
+
+        sessionService.closeSession(session);
+
+        ArgumentCaptor<BigDecimal> captor = ArgumentCaptor.forClass(BigDecimal.class);
+        verify(fullOperator, times(1)).addEarnings(captor.capture());
+        assertEquals(0, captor.getValue().compareTo(new BigDecimal("3.00")),
+                "La quota deve essere 0.30 × 10 = 3.00 (catturato: " + captor.getValue() + ")");
+
+        verify(userDaoMock, times(1)).update(fullOperator);
+        verify(connectionMock, times(1)).commit();
+    }
+
+    @Test
+    @DisplayName("Chiusura sessione senza operatore: nessun accredito")
+    void testCloseSession_NoOperator_NoCredit() throws Exception {
+        Driver driver = testDriver(3L, "Test", "t@test.com", SubscriptionPlan.BASIC);
+        driver.refund(new BigDecimal("50.00"));   // ← fondi, altrimenti open() rifiuta
+
+        ChargingStation station = ChargingStation.reconstitute(
+                1L, null, null, "Stazione", null, 0.0, 0.0, ConnectorType.TYPE_2,
+                50.0, false, new BigDecimal("0.30"), new BigDecimal("0.10"), 0.0, 0,
+                StationStatus.ACTIVE, null, null);
+
+        ChargingSession session = ChargingSession.open(driver, station, ChargingType.FAST, 20.0);
+        session.addTick(10.0, new BigDecimal("5.00"));
+
+        sessionService.closeSession(session);
+
+        verify(userDaoMock, never()).findById(anyLong());
+        verify(userDaoMock, never()).update(any());
+        verify(connectionMock, times(1)).commit();
+    }
+
+    @Test
+    @DisplayName("Chiusura forzata: accredito della quota all'operatore")
+    void testForceClose_CreditsOperator() throws Exception {
+        Driver driver = testDriver(4L, "Test", "t@test.com", SubscriptionPlan.BASIC);
+        driver.refund(new BigDecimal("50.00"));
+
+        StationOperator operatorStub = StationOperator.reconstitute(77L);
+        ChargingStation station = ChargingStation.reconstitute(
+                1L, operatorStub, null, "Stazione", null, 0.0, 0.0, ConnectorType.TYPE_2,
+                50.0, false, new BigDecimal("0.30"), new BigDecimal("0.10"), 0.0, 0,
+                StationStatus.ACTIVE, null, null);
+
+        ChargingSession session = ChargingSession.open(driver, station, ChargingType.FAST, 20.0);
+        session.addTick(4.0, new BigDecimal("2.00"));   // kWh erogati = 4.0
+
+        StationOperator fullOperator = mock(StationOperator.class);
+        doReturn(fullOperator).when(userDaoMock).findById(77L);
+
+        sessionService.forceClose(session);
+
+        // Quota = 0.30 × 4.0 = 1.20 (l'operatore incassa anche sull'energia della sessione interrotta)
+        verify(fullOperator, times(1)).addEarnings(new BigDecimal("1.20"));
+        verify(userDaoMock, times(1)).update(fullOperator);   // oltre a update(driver)
+        verify(connectionMock, times(1)).commit();
     }
 }

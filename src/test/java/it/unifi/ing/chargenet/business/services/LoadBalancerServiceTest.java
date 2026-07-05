@@ -60,7 +60,7 @@ class LoadBalancerServiceTest {
         mockedGridClusterStatic.when(GridCluster::getInstance).thenReturn(gridClusterMock);
 
         // 5. Creiamo il service da testare
-        loadBalancerService = new LoadBalancerService(sessionServiceMock, dbManagerInstance, daoFactoryMock);
+        loadBalancerService = new LoadBalancerService(sessionServiceMock, daoFactoryMock);
     }
 
     @AfterEach

@@ -128,7 +128,7 @@ class PostgresStationDaoTest {
         stationDao.save(s3);
 
         // ACT: Cerchiamo stazioni TYPE_2 vicine al punto (11.0, 11.0)
-        List<ChargingStation> nearest = stationDao.findNearestAvailable(11.0, 11.0, ConnectorType.TYPE_2, null);
+        List<ChargingStation> nearest = stationDao.findNearestAvailable(11.0, 11.0, ConnectorType.TYPE_2, null, null);
 
         // ASSERT
         // "Vicino ma Rotta" non deve apparire perché non è ACTIVE

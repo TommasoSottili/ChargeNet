@@ -1,7 +1,5 @@
 package it.unifi.ing.chargenet.domain.users;
 
-import it.unifi.ing.chargenet.domain.infrastructure.ChargingStation;
-
 import java.math.BigDecimal;
 ;
 
@@ -32,9 +30,6 @@ public class StationOperator  extends User {
 
     public BigDecimal getTotalEarnings() {
         return totalEarnings;
-    }
-    public void setTotalEarnings(BigDecimal totalEarnings) {
-        this.totalEarnings = totalEarnings;
     }
 
     // Metodo statico per ricostruire l'oggetto dal Database

@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.text.Font?>
+
+<BorderPane fx:controller="it.unifi.ing.chargenet.presentation.controller.AccountController" maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="700.0" prefWidth="400.0" style="-fx-background-color: #F8F9FA;" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1">
+
+    <top>
+        <VBox style="-fx-background-color: white; -fx-border-color: #E0E0E0; -fx-border-width: 0 0 1 0;" BorderPane.alignment="CENTER">
+            <padding><Insets bottom="15.0" left="20.0" right="20.0" top="20.0" /></padding>
+            <children>
+                <HBox alignment="CENTER_LEFT">
+                    <children>
+                        <Label onMouseClicked="#goBack" style="-fx-cursor: hand; -fx-text-fill: #7b6d6d;" text="&lt; Back">
+                            <font><Font name="System Bold" size="14.0" /></font>
+                        </Label>
+                        <Region HBox.hgrow="ALWAYS" />
+                        <Label text="Account &amp; Subscription" style="-fx-text-fill: #131212;">
+                            <font><Font name="System Bold" size="18.0" /></font>
+                        </Label>
+                        <Region HBox.hgrow="ALWAYS" />
+                        <Label text="      " />
+                    </children>
+                </HBox>
+            </children>
+        </VBox>
+    </top>
+
+    <center>
+        <ScrollPane fitToWidth="true" style="-fx-background-color: transparent; -fx-background: transparent; -fx-border-color: transparent;" BorderPane.alignment="CENTER">
+            <content>
+                <StackPane style="-fx-background-color: #F8F9FA;">
+                    <children>
+                        <VBox maxWidth="440.0" spacing="18.0">
+                            <padding><Insets bottom="20.0" left="20.0" right="20.0" top="20.0" /></padding>
+                            <children>
+
+                                <!-- WALLET -->
+                                <VBox spacing="10.0" style="-fx-background-color: white; -fx-background-radius: 10; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.05), 5, 0, 0, 2);">
+                                    <padding><Insets bottom="15.0" left="15.0" right="15.0" top="15.0" /></padding>
+                                    <children>
+                                        <Label text="Wallet Balance" style="-fx-text-fill: #7b6d6d;">
+                                            <font><Font size="13.0" /></font>
+                                        </Label>
+                                        <Label fx:id="walletLabel" text="€ 0.00" style="-fx-text-fill: #131212;">
+                                            <font><Font name="System Bold" size="34.0" /></font>
+                                        </Label>
+                                    </children>
+                                </VBox>
+
+                                <!-- MY VEHICLE -->
+                                <VBox spacing="10.0" style="-fx-background-color: white; -fx-background-radius: 10; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.05), 5, 0, 0, 2);">
+                                    <padding><Insets bottom="15.0" left="15.0" right="15.0" top="15.0" /></padding>
+                                    <children>
+                                        <Label text="My Vehicle" style="-fx-text-fill: #131212;">
+                                            <font><Font name="System Bold" size="16.0" /></font>
+                                        </Label>
+                                        <HBox alignment="CENTER_LEFT" spacing="15.0" style="-fx-background-color: #F8F9FA; -fx-border-color: #E0E0E0; -fx-border-radius: 8; -fx-background-radius: 8; -fx-padding: 12;">
+                                            <children>
+                                                <Label text="🚗"><font><Font size="24.0" /></font></Label>
+                                                <VBox alignment="CENTER_LEFT" spacing="2.0">
+                                                    <children>
+                                                        <Label fx:id="connectorLabel" text="Connector: —" style="-fx-text-fill: #131212;">
+                                                            <font><Font name="System Bold" size="14.0" /></font>
+                                                        </Label>
+                                                        <Label fx:id="batteryCapacityLabel" text="Battery capacity: —" style="-fx-text-fill: #7b6d6d;">
+                                                            <font><Font size="12.0" /></font>
+                                                        </Label>
+                                                    </children>
+                                                </VBox>
+                                            </children>
+                                        </HBox>
+                                    </children>
+                                </VBox>
+
+                                <!-- SUBSCRIPTION -->
+                                <VBox spacing="12.0" style="-fx-background-color: white; -fx-background-radius: 10; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.05), 5, 0, 0, 2);">
+                                    <padding><Insets bottom="15.0" left="15.0" right="15.0" top="15.0" /></padding>
+                                    <children>
+                                        <HBox alignment="CENTER_LEFT">
+                                            <children>
+                                                <Label text="Subscription Plan" style="-fx-text-fill: #131212;">
+                                                    <font><Font name="System Bold" size="16.0" /></font>
+                                                </Label>
+                                                <Region HBox.hgrow="ALWAYS" />
+                                                <Label fx:id="currentPlanBadge" style="-fx-background-color: #E3F2FD; -fx-text-fill: #1565C0; -fx-padding: 2 8 2 8; -fx-background-radius: 10;" text="CURRENT: BASIC">
+                                                    <font><Font name="System Bold" size="10.0" /></font>
+                                                </Label>
+                                            </children>
+                                        </HBox>
+
+                                        <VBox fx:id="planBasicCard" onMouseClicked="#selectBasic" spacing="2.0" style="-fx-cursor: hand; -fx-background-color: #F8F9FA; -fx-border-color: #E0E0E0; -fx-border-width: 2; -fx-border-radius: 8; -fx-background-radius: 8; -fx-padding: 12;">
+                                            <children>
+                                                <Label text="Basic" style="-fx-text-fill: #131212;"><font><Font name="System Bold" size="15.0" /></font></Label>
+                                                <Label fx:id="planBasicDesc" text="—" style="-fx-text-fill: #7b6d6d;"><font><Font size="12.0" /></font></Label>
+                                            </children>
+                                        </VBox>
+
+                                        <VBox fx:id="planPlusCard" onMouseClicked="#selectPlus" spacing="2.0" style="-fx-cursor: hand; -fx-background-color: #F8F9FA; -fx-border-color: #E0E0E0; -fx-border-width: 2; -fx-border-radius: 8; -fx-background-radius: 8; -fx-padding: 12;">
+                                            <children>
+                                                <Label text="Plus" style="-fx-text-fill: #131212;"><font><Font name="System Bold" size="15.0" /></font></Label>
+                                                <Label fx:id="planPlusDesc" text="—" style="-fx-text-fill: #7b6d6d;"><font><Font size="12.0" /></font></Label>
+                                            </children>
+                                        </VBox>
+
+                                        <VBox fx:id="planPremiumCard" onMouseClicked="#selectPremium" spacing="2.0" style="-fx-cursor: hand; -fx-background-color: #F8F9FA; -fx-border-color: #E0E0E0; -fx-border-width: 2; -fx-border-radius: 8; -fx-background-radius: 8; -fx-padding: 12;">
+                                            <children>
+                                                <Label text="Premium" style="-fx-text-fill: #131212;"><font><Font name="System Bold" size="15.0" /></font></Label>
+                                                <Label fx:id="planPremiumDesc" text="—" style="-fx-text-fill: #7b6d6d;"><font><Font size="12.0" /></font></Label>
+                                            </children>
+                                        </VBox>
+
+                                        <Button fx:id="applyPlanBtn" onAction="#applyPlanChange" disable="true" maxWidth="Infinity" mnemonicParsing="false" prefHeight="42.0" style="-fx-background-color: #131212; -fx-background-radius: 8; -fx-text-fill: white; -fx-cursor: hand;" text="Apply plan change">
+                                            <font><Font name="System Bold" size="14.0" /></font>
+                                            <VBox.margin><Insets top="5.0" /></VBox.margin>
+                                        </Button>
+                                    </children>
+                                </VBox>
+
+                                <!-- ACCOUNT INFO -->
+                                <VBox spacing="8.0" style="-fx-background-color: white; -fx-background-radius: 10; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.05), 5, 0, 0, 2);">
+                                    <padding><Insets bottom="15.0" left="15.0" right="15.0" top="15.0" /></padding>
+                                    <children>
+                                        <Label text="Account" style="-fx-text-fill: #131212;">
+                                            <font><Font name="System Bold" size="16.0" /></font>
+                                        </Label>
+                                        <Label text="Email" style="-fx-text-fill: #7b6d6d;"><font><Font size="12.0" /></font></Label>
+                                        <Label fx:id="emailLabel" text="—" style="-fx-text-fill: #131212;"><font><Font name="System Bold" size="14.0" /></font></Label>
+                                    </children>
+                                </VBox>
+
+                            </children>
+                        </VBox>
+                    </children>
+                </StackPane>
+            </content>
+        </ScrollPane>
+    </center>
+</BorderPane>

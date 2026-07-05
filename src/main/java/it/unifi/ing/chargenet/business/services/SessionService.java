@@ -5,6 +5,7 @@ import it.unifi.ing.chargenet.domain.sessions.ChargingSession;
 import it.unifi.ing.chargenet.domain.infrastructure.ChargingStation;
 import it.unifi.ing.chargenet.domain.sessions.SessionStatus;
 import it.unifi.ing.chargenet.domain.users.Driver;
+import it.unifi.ing.chargenet.domain.users.User;
 import it.unifi.ing.chargenet.domain.financials.Transaction;
 import it.unifi.ing.chargenet.domain.financials.TransactionType;
 import it.unifi.ing.chargenet.domain.infrastructure.StationStatus;
@@ -32,17 +33,14 @@ public class SessionService {
     }
 
     public ChargingSession openSession(Driver driver, ChargingStation station, ChargingStrategy strategy, double batteryStart) {
-        double minRequiredCost = strategy.calculateCost(5.0, station, driver);
-        if (driver.getWalletBalance().compareTo(BigDecimal.valueOf(minRequiredCost)) < 0) {
-            throw new IllegalStateException("Saldo insufficiente: sono necessari fondi per almeno 5 kWh.");
-        }
-
+        // La validazione del saldo minimo (e della disponibilità) vive nel Factory Method
+        // del dominio: ChargingSession.open è l'unico posto che protegge l'invariante.
         ChargingSession session = ChargingSession.open(driver, station, strategy.getType(), batteryStart);
         station.setBusy();
 
         Connection connection = null;
         try {
-            connection = DatabaseManager.getConnection();   // ← era DatabaseManager.getConnection()
+            connection = DatabaseManager.getConnection();
             connection.setAutoCommit(false);
 
             SessionDao sessionDao = daoFactory.createSessionDao(connection);
@@ -99,9 +97,11 @@ public class SessionService {
     }
 
     public Transaction closeSession(ChargingSession session) {
+        boolean wasActive = session.isActive();   // guardia anti-doppio-accredito
         session.complete();
         ChargingStation station = session.getStation();
         station.setActive();
+        station.clearReservation();
 
         BigDecimal totalCost = session.getCostTotal();
         Double totalKwhDelivered = session.getKwhDelivered();
@@ -110,12 +110,30 @@ public class SessionService {
 
         Connection connection = null;
         try {
-            connection = DatabaseManager.getConnection();   // ←
+            connection = DatabaseManager.getConnection();
             connection.setAutoCommit(false);
 
             TransactionDao transactionDao = daoFactory.createTransactionDao(connection);
             StationDao stationDao = daoFactory.createStationDao(connection);
             SessionDao sessionDao = daoFactory.createSessionDao(connection);
+            UserDao userDao = daoFactory.createUserDao(connection);
+
+            // Accredito operatore: quota = tariffOperator × kWh erogati.
+            // Calcolata solo se la sessione era attiva e la colonnina ha un operatore.
+            if (wasActive && station.getOperator() != null) {
+                double kwh = (totalKwhDelivered != null) ? totalKwhDelivered : 0.0;
+                BigDecimal operatorShare = (station.getTariffOperator() != null)
+                        ? station.getTariffOperator().multiply(BigDecimal.valueOf(kwh))
+                          .setScale(2, java.math.RoundingMode.HALF_UP)
+                        : BigDecimal.ZERO;
+                if (operatorShare.compareTo(BigDecimal.ZERO) > 0) {
+                    User u = userDao.findById(station.getOperator().getId());
+                    if (u instanceof StationOperator operator) {
+                        operator.addEarnings(operatorShare);
+                        userDao.update(operator);
+                    }
+                }
+            }
 
             transactionDao.save(transaction);
             stationDao.update(station);
@@ -132,6 +150,7 @@ public class SessionService {
     }
 
     public Transaction forceClose(ChargingSession session) {
+        boolean wasActive = session.isActive();   // guardia anti-doppio-accredito
         session.interrupt();
         ChargingStation station = session.getStation();
         if (station.getStatus() != StationStatus.OVERLOADED) {
@@ -159,13 +178,30 @@ public class SessionService {
 
         Connection connection = null;
         try {
-            connection = DatabaseManager.getConnection();   // ←
+            connection = DatabaseManager.getConnection();
             connection.setAutoCommit(false);
 
             TransactionDao transactionDao = daoFactory.createTransactionDao(connection);
             UserDao userDao = daoFactory.createUserDao(connection);
             StationDao stationDao = daoFactory.createStationDao(connection);
             SessionDao sessionDao = daoFactory.createSessionDao(connection);
+
+            // Accredito operatore: quota = tariffOperator × kWh REALMENTE erogati.
+            // Solo se la sessione era attiva e la colonnina ha un operatore.
+            if (wasActive && station.getOperator() != null) {
+                double kwhDelivered = (session.getKwhDelivered() != null) ? session.getKwhDelivered() : 0.0;
+                BigDecimal operatorShare = (station.getTariffOperator() != null)
+                        ? station.getTariffOperator().multiply(BigDecimal.valueOf(kwhDelivered))
+                          .setScale(2, java.math.RoundingMode.HALF_UP)
+                        : BigDecimal.ZERO;
+                if (operatorShare.compareTo(BigDecimal.ZERO) > 0) {
+                    User u = userDao.findById(station.getOperator().getId());
+                    if (u instanceof StationOperator operator) {
+                        operator.addEarnings(operatorShare);
+                        userDao.update(operator);
+                    }
+                }
+            }
 
             transactionDao.save(transaction);
             userDao.update(driver);
@@ -263,6 +299,19 @@ public class SessionService {
             return sessionDao.findActiveByDriverId(driver.getId());
         } catch (SQLException e) {
             throw new RuntimeException("Errore durante il recupero della sessione attiva del driver", e);
+        }
+    }
+
+    public ChargingSession getSessionById(Long sessionId) {
+        Connection connection = null;
+        try {
+            connection = DatabaseManager.getConnection();
+            SessionDao sessionDao = daoFactory.createSessionDao(connection);
+            return sessionDao.findById(sessionId);
+        } catch (Exception e) {
+            throw new RuntimeException("Errore nel recupero della sessione: " + e.getMessage(), e);
+        } finally {
+            closeQuietly(connection);
         }
     }
 

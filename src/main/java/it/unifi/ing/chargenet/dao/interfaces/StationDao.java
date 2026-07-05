@@ -9,7 +9,7 @@ public interface StationDao extends GenericDao<ChargingStation> {
     List<ChargingStation> findByStatus(StationStatus status);
     List<ChargingStation> findByOperator(Long operatorId);
     List<ChargingStation> findByConnectorType(ConnectorType type);
-    List<ChargingStation> findNearestAvailable(double lat, double lng, ConnectorType type, Long excludeId);
+    List<ChargingStation> findNearestAvailable(double lat, double lng, ConnectorType type, Long excludeId, Long reservedByDriver);
     List<ChargingStation> findByTransformer(Long transformerId);
     void expireHolds();
     List<ChargingStation> findActive();

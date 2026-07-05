@@ -4,7 +4,6 @@ import it.unifi.ing.chargenet.domain.infrastructure.ChargingStation;
 import it.unifi.ing.chargenet.domain.users.Driver;
 import it.unifi.ing.chargenet.domain.users.InsufficientBalanceException;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
 
 public class ChargingSession {
@@ -43,16 +42,13 @@ public class ChargingSession {
             throw new StationNotAvailableException("La colonnina " + station.getName() + " non è disponibile o non è compatibile col tuo veicolo.");
         }
 
-        BigDecimal pricePerKwh = station.getTotalTariff();
-        BigDecimal discountMultiplier = BigDecimal.ONE.subtract(BigDecimal.valueOf(driver.getDiscount()));
-
-        BigDecimal minimumRequired = pricePerKwh
-                .multiply(BigDecimal.valueOf(5))
-                .multiply(discountMultiplier);
+        // Prezzo minimo per 5 kWh calcolato dal dominio (sconto solo sulla quota piattaforma).
+        // Stesso metodo usato dalle strategie → gate e tariffazione coerenti.
+        BigDecimal minimumRequired = station.priceFor(5.0, driver);
 
         if (!driver.hasSufficientBalance(minimumRequired)) {
             throw new InsufficientBalanceException("Credito insufficiente per avviare la sessione. È richiesto un saldo di almeno " +
-                    minimumRequired.setScale(2, RoundingMode.HALF_UP) + "€.");
+                    minimumRequired + "€.");
         }
 
         return new ChargingSession(driver, station, strategy, batteryStart);

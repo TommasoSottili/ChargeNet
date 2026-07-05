@@ -1,6 +1,7 @@
 package it.unifi.ing.chargenet.domain.users;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 public class Driver extends User {
 
@@ -93,12 +94,29 @@ public class Driver extends User {
     public void refund(BigDecimal amount) {
         this.walletBalance = this.walletBalance.add(amount);
     }
-    public void updatePlan(SubscriptionPlan newPlan) {
-        BigDecimal fee = newPlan.getMonthlyFee();
-        if (fee.compareTo(BigDecimal.ZERO) > 0) {
-            charge(fee);  // riusa la validazione esistente — lancia InsufficientBalanceException se serve
+    /**
+     * Passa al nuovo piano pagando SOLO la differenza di canone rispetto al piano
+     * corrente (proration). Blocca i "downgrade" (differenza negativa).
+     * @return l'importo effettivamente addebitato (0 se il canone non aumenta).
+     */
+    public BigDecimal updatePlan(SubscriptionPlan newPlan) {
+        if (newPlan == null) {
+            throw new IllegalArgumentException("Il piano di abbonamento non è valido.");
+        }
+        BigDecimal currentFee = (this.subscriptionPlan != null)
+                ? this.subscriptionPlan.getMonthlyFee() : BigDecimal.ZERO;
+        BigDecimal delta = newPlan.getMonthlyFee().subtract(currentFee)
+                .setScale(2, RoundingMode.HALF_UP);
+
+        if (delta.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException(
+                    "Non è possibile passare a un piano inferiore durante il periodo attivo.");
+        }
+        if (delta.compareTo(BigDecimal.ZERO) > 0) {
+            charge(delta);   // riusa la validazione: lancia InsufficientBalanceException se il saldo non basta
         }
         this.subscriptionPlan = newPlan;
+        return delta;
     }
 
     /**

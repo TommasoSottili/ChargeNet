@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Hyperlink?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.PasswordField?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.text.Font?>
+
+<BorderPane maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="768.0" prefWidth="1024.0" style="-fx-background-color: #F8F9FA;" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="it.unifi.ing.chargenet.presentation.controller.RegistrationController">
+
+   <center>
+      <ScrollPane fitToHeight="true" fitToWidth="true" style="-fx-background: transparent; -fx-background-color: transparent; -fx-border-color: transparent;" BorderPane.alignment="CENTER">
+         <content>
+            <StackPane style="-fx-background-color: #F8F9FA;">
+               <children>
+                  <VBox alignment="CENTER" maxWidth="420.0" spacing="20.0">
+                     <padding>
+                        <Insets bottom="30.0" left="25.0" right="25.0" top="30.0" />
+                     </padding>
+                     <children>
+
+                        <VBox alignment="CENTER" spacing="5.0">
+                           <children>
+                              <Label text="ChargeNet" style="-fx-text-fill: #f59100;">
+                                 <font><Font name="System Bold" size="36.0" /></font>
+                              </Label>
+                              <Label text="Manage the charging of your electric car" style="-fx-text-fill: #555555;">
+                                 <font><Font size="13.0" /></font>
+                              </Label>
+                           </children>
+                           <VBox.margin>
+                              <Insets bottom="5.0" />
+                           </VBox.margin>
+                        </VBox>
+
+                        <VBox spacing="15.0" style="-fx-background-color: #FFFFFF; -fx-background-radius: 12; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.08), 15, 0, 0, 4); -fx-border-color: #E0E0E0; -fx-border-radius: 12; -fx-border-width: 1;">
+                           <padding>
+                              <Insets bottom="30.0" left="25.0" right="25.0" top="30.0" />
+                           </padding>
+                           <children>
+                              <StackPane>
+                                 <VBox.margin>
+                                    <Insets bottom="5.0" />
+                                 </VBox.margin>
+                                 <children>
+                                    <Label text="CREATE ACCOUNT" style="-fx-text-fill: #000000;">
+                                       <font><Font name="System Bold" size="22.0" /></font>
+                                    </Label>
+                                 </children>
+                              </StackPane>
+
+                              <VBox spacing="5.0">
+                                 <children>
+                                    <Label text="Full Name" style="-fx-text-fill: #333333;">
+                                       <font><Font name="System Bold" size="12.0" /></font>
+                                    </Label>
+                                    <TextField fx:id="nameField" prefHeight="40.0" promptText="Luca Moracci" style="-fx-background-color: white; -fx-border-color: #CCCCCC; -fx-background-radius: 8; -fx-border-radius: 8; -fx-padding: 0 10 0 10;">
+                                       <font><Font size="14.0" /></font>
+                                    </TextField>
+                                 </children>
+                              </VBox>
+
+                              <VBox spacing="5.0">
+                                 <children>
+                                    <Label text="Email address" style="-fx-text-fill: #333333;">
+                                       <font><Font name="System Bold" size="12.0" /></font>
+                                    </Label>
+                                    <TextField fx:id="emailField" prefHeight="40.0" promptText="myaccount@email.com" style="-fx-background-color: white; -fx-border-color: #CCCCCC; -fx-background-radius: 8; -fx-border-radius: 8; -fx-padding: 0 10 0 10;">
+                                       <font><Font size="14.0" /></font>
+                                    </TextField>
+                                 </children>
+                              </VBox>
+
+                              <VBox spacing="5.0">
+                                 <children>
+                                    <Label text="Password" style="-fx-text-fill: #333333;">
+                                       <font><Font name="System Bold" size="12.0" /></font>
+                                    </Label>
+                                    <StackPane>
+                                       <children>
+                                          <TextField fx:id="passwordVisibleField" managed="false" prefHeight="40.0" style="-fx-background-color: white; -fx-border-color: #CCCCCC; -fx-background-radius: 8; -fx-border-radius: 8; -fx-padding: 0 35 0 10;" visible="false">
+                                             <font><Font size="14.0" /></font>
+                                          </TextField>
+                                          <PasswordField fx:id="passwordField" prefHeight="40.0" promptText="Insert your password" style="-fx-background-color: white; -fx-border-color: #CCCCCC; -fx-background-radius: 8; -fx-border-radius: 8; -fx-padding: 0 35 0 10;">
+                                             <font><Font size="14.0" /></font>
+                                          </PasswordField>
+                                          <ImageView fx:id="togglePasswordIcon" fitHeight="20.0" fitWidth="20.0" onMouseClicked="#togglePasswordVisibility" pickOnBounds="true" preserveRatio="true" style="-fx-cursor: hand;" StackPane.alignment="CENTER_RIGHT">
+                                             <StackPane.margin><Insets right="10.0" /></StackPane.margin>
+                                             <image>
+                                                <Image url="@../images/view.png" />
+                                             </image>
+                                          </ImageView>
+                                       </children>
+                                    </StackPane>
+                                 </children>
+                              </VBox>
+
+                              <VBox spacing="5.0">
+                                 <children>
+                                    <Label text="Select Role" style="-fx-text-fill: #333333;">
+                                       <font><Font name="System Bold" size="12.0" /></font>
+                                    </Label>
+                                    <ComboBox fx:id="roleComboBox" prefHeight="40.0" prefWidth="420.0" promptText="Choose driver or manager..." style="-fx-background-color: white; -fx-border-color: #CCCCCC; -fx-background-radius: 8; -fx-border-radius: 8;" />
+                                 </children>
+                              </VBox>
+
+                              <VBox fx:id="driverExtraFieldsBox" spacing="15.0" visible="false" managed="false">
+                                 <children>
+                                    <VBox spacing="5.0">
+                                       <children>
+                                          <Label text="Connector Type" style="-fx-text-fill: #333333;">
+                                             <font><Font name="System Bold" size="12.0" /></font>
+                                          </Label>
+                                          <ComboBox fx:id="connectorTypeComboBox" prefHeight="40.0" prefWidth="420.0"
+                                                    promptText="Select your vehicle connector..."
+                                                    style="-fx-background-color: white; -fx-border-color: #CCCCCC; -fx-background-radius: 8; -fx-border-radius: 8;" />
+                                       </children>
+                                    </VBox>
+                                 </children>
+                              </VBox>
+
+                              <Button maxWidth="Infinity" mnemonicParsing="false" onAction="#handleRegister" prefHeight="45.0" style="-fx-background-color: #F59100; -fx-background-radius: 8; -fx-cursor: hand; -fx-text-fill: white;" text="REGISTER NOW">
+                                 <font><Font name="System Bold" size="16.0" /></font>
+                                 <VBox.margin><Insets top="10.0" /></VBox.margin>
+                              </Button>
+                           </children>
+                        </VBox>
+
+                        <HBox alignment="CENTER" spacing="5.0">
+                           <children>
+                              <Label text="Already have an account?" style="-fx-text-fill: #555555;" />
+                              <Hyperlink onAction="#goToLogin" style="-fx-text-fill: #000000; -fx-font-weight: bold;" text="Log in" />
+                           </children>
+                        </HBox>
+
+                     </children>
+                  </VBox>
+               </children>
+            </StackPane>
+         </content>
+      </ScrollPane>
+   </center>
+</BorderPane>
