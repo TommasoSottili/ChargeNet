@@ -170,7 +170,8 @@ public class StationService {
                     driver.getLatitude(),
                     driver.getLongitude(),
                     driver.getConnectorType(), // o come si chiama il getter del ConnectorType
-                    null // Nessun ID specifico da escludere dalla ricerca
+                    null, // Nessun ID specifico da escludere dalla ricerca
+                    driver.getId()
             );
 
         } catch (Exception e) {
@@ -230,6 +231,7 @@ public class StationService {
      * SODDISFA UC2 (View My Stations) - Per lo Station Operator
      */
     public List<ChargingStation> getStationsByOperator(StationOperator operator) {
+        if (operator == null) throw new IllegalArgumentException("L'operatore non può essere nullo.");
         Connection connection = null;
         try {
             connection = DatabaseManager.getConnection();
@@ -274,6 +276,19 @@ public class StationService {
             return stationDao.findByStatus(it.unifi.ing.chargenet.domain.infrastructure.StationStatus.OVERLOADED);
         } catch (Exception e) {
             throw new RuntimeException("Errore recupero stazioni in sovraccarico", e);
+        } finally {
+            closeQuietly(connection);
+        }
+    }
+
+    public List<ChargingStation> getPendingStations() {
+        Connection connection = null;
+        try {
+            connection = DatabaseManager.getConnection();
+            StationDao stationDao = daoFactory.createStationDao(connection);
+            return stationDao.findByStatus(it.unifi.ing.chargenet.domain.infrastructure.StationStatus.PENDING_VERIFICATION);
+        } catch (Exception e) {
+            throw new RuntimeException("Errore recupero stazioni in attesa", e);
         } finally {
             closeQuietly(connection);
         }

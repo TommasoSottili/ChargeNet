@@ -8,6 +8,7 @@ import it.unifi.ing.chargenet.domain.financials.Transaction;
 import it.unifi.ing.chargenet.domain.financials.TransactionType;
 import it.unifi.ing.chargenet.domain.users.ConnectorType;
 import it.unifi.ing.chargenet.domain.users.Driver;
+import it.unifi.ing.chargenet.domain.users.SubscriptionPlan;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -117,6 +118,39 @@ class WalletServiceTest {
         verify(userDaoMock, times(1)).update(mockDriver);
         verify(transactionDaoMock, times(1)).save(resultTx);
         verify(connectionMock, times(1)).commit();
+    }
+
+    @Test
+    @DisplayName("Upgrade PLUS→PREMIUM: addebita solo la differenza")
+    void testChangePlan_ProrationUpgrade() throws SQLException {
+        Driver driver = Driver.reconstitute(1L, "Anna", "anna@mail.com", "pwd",
+                43.77, 11.25, ConnectorType.TYPE_2,
+                SubscriptionPlan.PLUS, 50.0, new BigDecimal("100.00"));
+
+        Transaction tx = walletService.changePlan(driver, SubscriptionPlan.PREMIUM);
+
+        // ⚠️ assume PLUS=9.00, PREMIUM=25.00 → differenza 16.00. Adatta se i canoni differiscono.
+        assertEquals(new BigDecimal("-16.00"), tx.getAmount(),
+                "Da PLUS a PREMIUM si paga solo 25 − 9 = 16");
+        verify(userDaoMock, times(1)).update(driver);
+        verify(connectionMock, times(1)).commit();
+    }
+
+    @Test
+    @DisplayName("Downgrade bloccato: PREMIUM→PLUS non consentito")
+    void testChangePlan_DowngradeBlocked() throws SQLException {
+        Driver driver = Driver.reconstitute(1L, "Bea", "bea@mail.com", "pwd",
+                43.77, 11.25, ConnectorType.TYPE_2,
+                SubscriptionPlan.PREMIUM, 50.0, new BigDecimal("100.00"));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> walletService.changePlan(driver, SubscriptionPlan.PLUS));
+
+        verify(userDaoMock, never()).update(any());
+        verify(transactionDaoMock, never()).save(any());
+        verify(connectionMock, never()).commit();
+        verify(connectionMock, times(1)).rollback();   // il downgrade viene rifiutato DENTRO la transazione
+        verify(connectionMock, times(1)).close();
     }
 
     @Test

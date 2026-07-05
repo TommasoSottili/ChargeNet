@@ -1,0 +1,210 @@
+/* ==========================================================================
+   CHARGENET — Foglio di stile condiviso
+   Convenzione: SOLO classi semantiche (styleClass), MAI selettori per tipo
+   (es. .combo-box, .label) che sovrascriverebbero in modo imprevedibile.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. SFONDO PAGINA
+   -------------------------------------------------------------------------- */
+.root {
+    -fx-background-color: linear-gradient(to bottom right, #FDFBFB, #EBEDEE);
+}
+
+/* Sfondo piatto alternativo (es. schermate auth) — applicalo al nodo radice */
+.bg-flat {
+    -fx-background-color: #F8F9FA;
+}
+
+/* --------------------------------------------------------------------------
+   2. CONTENITORI / CARD
+   -------------------------------------------------------------------------- */
+.card-sollevata {
+    -fx-background-color: white;
+    -fx-background-radius: 20;
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 0, 0, 0.12), 30, 0, 0, 15);
+}
+
+/* Card del form auth (riquadro bianco di Login/Register) */
+.card-form {
+    -fx-background-color: #FFFFFF;
+    -fx-background-radius: 12;
+    -fx-border-color: #E0E0E0;
+    -fx-border-radius: 12;
+    -fx-border-width: 1;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.08), 15, 0, 0, 4);
+}
+
+/* --------------------------------------------------------------------------
+   3. TIPOGRAFIA
+   -------------------------------------------------------------------------- */
+.app-title {
+    -fx-text-fill: #F59100;
+    -fx-font-size: 36px;
+    -fx-font-weight: bold;
+}
+.app-subtitle {
+    -fx-text-fill: #555555;
+    -fx-font-size: 13px;
+}
+.section-title {
+    -fx-text-fill: #000000;
+    -fx-font-size: 22px;
+    -fx-font-weight: bold;
+}
+.form-label {
+    -fx-text-fill: #333333;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+}
+.text-muted {
+    -fx-text-fill: #555555;
+}
+
+/* --------------------------------------------------------------------------
+   4. CAMPI DI INPUT (TextField / PasswordField)
+   Marca i campi con styleClass="input-field"
+   -------------------------------------------------------------------------- */
+.input-field {
+    -fx-background-color: white;
+    -fx-border-color: #CCCCCC;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+    -fx-padding: 0 10 0 10;
+    -fx-font-size: 14px;
+}
+.input-field:focused {
+    -fx-border-color: #F59100;
+}
+.input-error {
+    -fx-border-color: #D32F2F;
+}
+
+/* --------------------------------------------------------------------------
+   5. COMBOBOX  (ex selettori generici .combo-box — ORA scoping esplicito)
+   Marca le ComboBox con styleClass="combo-input"
+   -------------------------------------------------------------------------- */
+.combo-input {
+    -fx-border-color: #CCCCCC;
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+    -fx-background-color: white;
+}
+.combo-input .arrow-button {
+    -fx-background-color: #E8E8E8;
+    -fx-background-radius: 0 8 8 0;
+}
+.combo-input .list-cell {
+    -fx-padding: 0 10 0 10;
+}
+
+/* --------------------------------------------------------------------------
+   6. PULSANTI
+   -------------------------------------------------------------------------- */
+/* Pulsante primario arancione (es. REGISTER NOW / LOGIN) */
+.btn-primary {
+    -fx-background-color: #F59100;
+    -fx-background-radius: 8;
+    -fx-text-fill: white;
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-cursor: hand;
+    -fx-pref-height: 45px;
+}
+.btn-primary:hover {
+    -fx-background-color: #D97F00;
+}
+
+/* Pulsante secondario (bordato, sfondo chiaro) */
+.btn-secondary {
+    -fx-background-color: #F8F9FA;
+    -fx-border-color: #131212;
+    -fx-border-width: 2px;
+    -fx-border-radius: 8px;
+    -fx-background-radius: 8px;
+    -fx-text-fill: #131212;
+    -fx-cursor: hand;
+    -fx-padding: 8px 20px;
+}
+.btn-secondary:hover {
+    -fx-background-color: #F59100;
+    -fx-border-color: #F59100;
+    -fx-text-fill: white;
+}
+
+/* Link testuale (Hyperlink) */
+.link {
+    -fx-text-fill: #000000;
+    -fx-font-weight: bold;
+    -fx-border-color: transparent;
+}
+
+/* --------------------------------------------------------------------------
+   7. DRIVER HUB: card che si illuminano interamente (INVARIATO)
+   -------------------------------------------------------------------------- */
+.action-card {
+    -fx-background-color: white;
+    -fx-background-radius: 10;
+    -fx-border-color: #E0E0E0;
+    -fx-border-radius: 10;
+    -fx-cursor: hand;
+    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 15, 0, 0, 5);
+}
+.action-card .label-titolo      { -fx-text-fill: #131212; }
+.action-card .label-sottotitolo { -fx-text-fill: #7b6d6d; }
+.action-card:hover {
+    -fx-background-color: #F59100;
+    -fx-border-color: #F59100;
+}
+.action-card:hover .label-titolo,
+.action-card:hover .label-sottotitolo {
+    -fx-text-fill: white;
+}
+
+/* --------------------------------------------------------------------------
+   8. STATION EXPLORER: card fissa, si illumina solo il bottone (INVARIATO)
+   -------------------------------------------------------------------------- */
+.station-card {
+    -fx-background-color: white;
+    -fx-background-radius: 10;
+    -fx-border-color: #E0E0E0;
+    -fx-border-radius: 10;
+    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 15, 0, 0, 5);
+}
+.station-card .label-titolo      { -fx-text-fill: #131212; }
+.station-card .label-sottotitolo { -fx-text-fill: #7b6d6d; }
+
+.btn-smart-book {
+    -fx-background-color: #F8F9FA;
+    -fx-border-color: #131212;
+    -fx-border-style: solid;
+    -fx-border-width: 2px;
+    -fx-border-radius: 8px;
+    -fx-background-radius: 8px;
+    -fx-background-insets: 0px;
+    -fx-padding: 5px 15px 5px 15px;
+    -fx-text-fill: #131212;
+    -fx-cursor: hand;
+    -fx-effect: null;
+}
+.btn-smart-book:hover {
+    -fx-background-color: #F59100;
+    -fx-border-color: #F59100;
+    -fx-border-width: 2px;
+    -fx-border-radius: 8px;
+    -fx-background-radius: 8px;
+    -fx-background-insets: 0px;
+    -fx-padding: 5px 15px 5px 15px;
+    -fx-text-fill: white;
+    -fx-effect: null;
+}
+
+/* --------------------------------------------------------------------------
+   9. BARRA BATTERIA (LIVE SESSION) (INVARIATO)
+   -------------------------------------------------------------------------- */
+.battery-bar {
+    -fx-accent: #2E7D32;
+    -fx-control-inner-background: #E0E0E0;
+}
+.battery-bar .bar   { -fx-background-radius: 10px; -fx-padding: 2px; }
+.battery-bar .track { -fx-background-radius: 10px; }

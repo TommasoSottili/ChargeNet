@@ -195,32 +195,4 @@ class ValidationServiceTest {
         // Il database non deve essere toccato
         verify(stationDaoMock, never()).update(any());
     }
-
-    // =========================================================================
-    // --- 4. TEST: CODA DI LAVORO (PENDING STATIONS) ---
-    // =========================================================================
-
-    @Test
-    @DisplayName("Recupero delle colonnine in attesa di validazione con successo")
-    void testGetPendingStations_Success() throws SQLException {
-        // --- ARRANGE ---
-        // Prepariamo una colonnina finta e la mettiamo in una lista
-        ChargingStation mockStation = mock(ChargingStation.class);
-        java.util.List<ChargingStation> expectedList = java.util.Collections.singletonList(mockStation);
-
-        // Istruiamo il mock del DAO (che avevamo già inizializzato nel @BeforeEach)
-        when(stationDaoMock.findByStatus(it.unifi.ing.chargenet.domain.infrastructure.StationStatus.PENDING_VERIFICATION))
-                .thenReturn(expectedList);
-
-        // --- ACT ---
-        java.util.List<ChargingStation> result = validationService.getPendingStations();
-
-        // --- ASSERT ---
-        assertNotNull(result, "La lista non deve essere null");
-        assertEquals(1, result.size(), "La lista deve contenere un elemento");
-        assertEquals(mockStation, result.get(0), "L'elemento deve essere la nostra colonnina mockata");
-
-        // Verifichiamo che il try-with-resources abbia chiuso correttamente la connessione (in sola lettura)
-        verify(connectionMock, times(1)).close();
-    }
 }

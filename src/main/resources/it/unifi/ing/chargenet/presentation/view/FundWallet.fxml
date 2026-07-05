@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.text.Font?>
+
+<BorderPane fx:controller="it.unifi.ing.chargenet.presentation.controller.FundWalletController" maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="700.0" prefWidth="400.0" style="-fx-background-color: #F8F9FA;" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1">
+
+    <top>
+        <VBox style="-fx-background-color: white; -fx-border-color: #E0E0E0; -fx-border-width: 0 0 1 0;" BorderPane.alignment="CENTER">
+            <padding>
+                <Insets bottom="15.0" left="20.0" right="20.0" top="20.0" />
+            </padding>
+            <children>
+                <HBox alignment="CENTER_LEFT">
+                    <children>
+                        <Label onMouseClicked="#goBack" style="-fx-cursor: hand;" text="&lt; Back" textFill="#7b6d6d">
+                            <font><Font name="System Bold" size="14.0" /></font>
+                        </Label>
+                        <Region HBox.hgrow="ALWAYS" />
+                        <Label text="Fund Wallet" textFill="#131212">
+                            <font><Font name="System Bold" size="18.0" /></font>
+                        </Label>
+                        <Region HBox.hgrow="ALWAYS" />
+                        <Label text="        " />
+                    </children>
+                </HBox>
+            </children>
+        </VBox>
+    </top>
+
+    <center>
+        <VBox alignment="TOP_CENTER" spacing="20.0" BorderPane.alignment="CENTER">
+            <padding>
+                <Insets bottom="20.0" left="20.0" right="20.0" top="20.0" />
+            </padding>
+            <children>
+
+                <VBox alignment="CENTER" prefHeight="140.0" styleClass="station-card">
+                    <children>
+                        <Label text="Current Balance" textFill="#7b6d6d">
+                            <font><Font size="14.0" /></font>
+                        </Label>
+                        <Label fx:id="currentBalanceLabel" text="€ 0.00" textFill="#131212">
+                            <font><Font name="System Bold" size="48.0" /></font>
+                            <VBox.margin><Insets top="5.0" /></VBox.margin>
+                        </Label>
+                    </children>
+                </VBox>
+
+                <VBox spacing="10.0">
+                    <VBox.margin><Insets top="10.0" /></VBox.margin>
+                    <children>
+                        <Label text="Select Amount" textFill="#131212">
+                            <font><Font name="System Bold" size="16.0" /></font>
+                        </Label>
+
+                        <HBox spacing="15.0">
+                            <children>
+                                <Button fx:id="preset10" onAction="#selectPreset10" maxWidth="Infinity" mnemonicParsing="false" prefHeight="50.0" style="-fx-background-color: white; -fx-border-color: #E0E0E0; -fx-border-radius: 8; -fx-background-radius: 8; -fx-cursor: hand;" text="+ € 10" textFill="#131212" HBox.hgrow="ALWAYS">
+                                    <font><Font name="System Bold" size="16.0" /></font>
+                                </Button>
+                                <Button fx:id="preset20" onAction="#selectPreset20" maxWidth="Infinity" mnemonicParsing="false" prefHeight="50.0" style="-fx-background-color: white; -fx-border-color: #E0E0E0; -fx-border-radius: 8; -fx-background-radius: 8; -fx-cursor: hand;" text="+ € 20" textFill="#131212" HBox.hgrow="ALWAYS">
+                                    <font><Font name="System Bold" size="16.0" /></font>
+                                </Button>
+                                <Button fx:id="preset50" onAction="#selectPreset50" maxWidth="Infinity" mnemonicParsing="false" prefHeight="50.0" style="-fx-background-color: white; -fx-border-color: #E0E0E0; -fx-border-radius: 8; -fx-background-radius: 8; -fx-cursor: hand;" text="+ € 50" textFill="#131212" HBox.hgrow="ALWAYS">
+                                    <font><Font name="System Bold" size="16.0" /></font>
+                                </Button>
+                            </children>
+                        </HBox>
+
+                        <HBox alignment="CENTER_LEFT" prefHeight="50.0" style="-fx-background-color: white; -fx-border-color: #E0E0E0; -fx-border-radius: 8; -fx-background-radius: 8;">
+                            <VBox.margin><Insets top="5.0" /></VBox.margin>
+                            <padding><Insets left="15.0" right="15.0" /></padding>
+                            <children>
+                                <Label text="Custom: €" textFill="#7b6d6d">
+                                    <font><Font size="14.0" /></font>
+                                </Label>
+                                <TextField fx:id="customAmountField" promptText="0.00" style="-fx-background-color: transparent;" HBox.hgrow="ALWAYS">
+                                    <font><Font name="System Bold" size="16.0" /></font>
+                                </TextField>
+                            </children>
+                        </HBox>
+                    </children>
+                </VBox>
+
+                <VBox spacing="10.0">
+                    <VBox.margin><Insets top="20.0" /></VBox.margin>
+                    <children>
+                        <Label text="Payment Method" textFill="#131212">
+                            <font><Font name="System Bold" size="16.0" /></font>
+                        </Label>
+
+                        <HBox alignment="CENTER_LEFT" prefHeight="60.0" styleClass="station-card">
+                            <padding><Insets left="15.0" right="15.0" /></padding>
+                            <children>
+                                <VBox alignment="CENTER" prefHeight="30.0" prefWidth="45.0" style="-fx-background-color: #1565C0; -fx-background-radius: 4;">
+                                    <children>
+                                        <Label text="VISA" textFill="WHITE">
+                                            <font><Font name="System Bold Italic" size="12.0" /></font>
+                                        </Label>
+                                    </children>
+                                </VBox>
+                                <VBox alignment="CENTER_LEFT" HBox.hgrow="ALWAYS">
+                                    <HBox.margin><Insets left="15.0" /></HBox.margin>
+                                    <children>
+                                        <Label text="•••• •••• •••• 4242" textFill="#131212">
+                                            <font><Font name="System Bold" size="14.0" /></font>
+                                        </Label>
+                                        <Label text="Expires 12/28" textFill="#7b6d6d">
+                                            <font><Font size="12.0" /></font>
+                                        </Label>
+                                    </children>
+                                </VBox>
+                            </children>
+                        </HBox>
+                    </children>
+                </VBox>
+
+            </children>
+        </VBox>
+    </center>
+
+    <bottom>
+        <VBox style="-fx-background-color: white; -fx-border-color: #E0E0E0; -fx-border-width: 1 0 0 0;" BorderPane.alignment="CENTER">
+            <padding>
+                <Insets bottom="20.0" left="20.0" right="20.0" top="15.0" />
+            </padding>
+            <children>
+                <HBox alignment="CENTER_LEFT">
+                    <VBox.margin><Insets bottom="10.0" /></VBox.margin>
+                    <children>
+                        <Label text="Total to pay:" textFill="#7b6d6d">
+                            <font><Font size="14.0" /></font>
+                        </Label>
+                        <Region HBox.hgrow="ALWAYS" />
+                        <Label fx:id="totalToPayLabel" text="€ 0.00" textFill="#131212">
+                            <font><Font name="System Bold" size="18.0" /></font>
+                        </Label>
+                    </children>
+                </HBox>
+                <Button onAction="#confirmAndPay" maxWidth="Infinity" mnemonicParsing="false" prefHeight="50.0" style="-fx-background-color: #131212; -fx-background-radius: 10; -fx-cursor: hand;" text="Confirm &amp; Pay" textFill="WHITE">
+                    <font><Font name="System Bold" size="16.0" /></font>
+                </Button>
+            </children>
+        </VBox>
+    </bottom>
+</BorderPane>

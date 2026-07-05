@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.text.Font?>
+
+<BorderPane fx:controller="it.unifi.ing.chargenet.presentation.controller.ReliabilityDashboardController" maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="700.0" prefWidth="400.0" style="-fx-background-color: #F8F9FA;" xmlns="http://javafx.com/javafx/25" xmlns:fx="http://javafx.com/fxml/1">
+
+    <top>
+        <VBox style="-fx-background-color: white; -fx-border-color: #E0E0E0; -fx-border-width: 0 0 1 0;" BorderPane.alignment="CENTER">
+            <padding><Insets bottom="15.0" left="20.0" right="20.0" top="20.0" /></padding>
+            <children>
+                <HBox alignment="CENTER_LEFT">
+                    <children>
+                        <Label onMouseClicked="#goBack" style="-fx-cursor: hand; -fx-text-fill: #7b6d6d;" text="&lt; Back">
+                            <font><Font name="System Bold" size="14.0" /></font>
+                        </Label>
+                        <Region HBox.hgrow="ALWAYS" />
+                        <Label style="-fx-text-fill: #131212;" text="Grid Dashboard">
+                            <font><Font name="System Bold" size="18.0" /></font>
+                        </Label>
+                        <Region HBox.hgrow="ALWAYS" />
+                        <Label text="        " />
+                    </children>
+                </HBox>
+            </children>
+        </VBox>
+    </top>
+
+    <center>
+        <ScrollPane fitToWidth="true" style="-fx-background-color: transparent; -fx-background: transparent; -fx-border-color: transparent;" BorderPane.alignment="CENTER">
+            <content>
+                <VBox spacing="15.0">
+                    <padding><Insets bottom="20.0" left="20.0" right="20.0" top="20.0" /></padding>
+                    <children>
+
+                        <VBox alignment="CENTER" prefHeight="140.0" styleClass="station-card">
+                            <children>
+                                <Label style="-fx-text-fill: #7b6d6d;" text="Total Network Load">
+                                    <font><Font size="14.0" /></font>
+                                </Label>
+                                <Label fx:id="totalLoadLabel" style="-fx-text-fill: #1565C0;" text="—">
+                                    <font><Font name="System Bold" size="55.0" /></font>
+                                </Label>
+                                <Label fx:id="statusLabel" style="-fx-text-fill: #2E7D32;" text="—">
+                                    <font><Font name="System Bold" size="12.0" /></font>
+                                </Label>
+                            </children>
+                        </VBox>
+
+                        <Label style="-fx-text-fill: #131212;" text="Transformer Load">
+                            <font><Font name="System Bold" size="16.0" /></font>
+                            <VBox.margin><Insets bottom="-5.0" top="5.0" /></VBox.margin>
+                        </Label>
+
+                        <VBox fx:id="transformersContainer" spacing="15.0" />
+
+                    </children>
+                </VBox>
+            </content>
+        </ScrollPane>
+    </center>
+</BorderPane>

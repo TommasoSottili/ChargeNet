@@ -110,18 +110,24 @@ public class PostgresStationDao implements StationDao {
     }
 
     @Override
-    public List<ChargingStation> findNearestAvailable(double lat, double lng, ConnectorType type, Long excludeId) {
+    public List<ChargingStation> findNearestAvailable(double lat, double lng, ConnectorType type,
+                                                      Long excludeId, Long reservedByDriverId) {
+        // Mostra: colonnine ACTIVE (libere per tutti) OPPURE RESERVED dal driver stesso
+        // (così la sua prenotazione resta visibile e caricabile). Le RESERVED da altri,
+        // le BUSY e le OVERLOADED restano nascoste. Ordinamento per distanza euclidea.
         String sql = "SELECT * FROM charging_stations " +
-                "WHERE status = 'ACTIVE' AND connector_type = ? AND id != ? " +
+                "WHERE (status = 'ACTIVE' OR (status = 'RESERVED' AND reserved_by_id = ?)) " +
+                "AND connector_type = ? AND id != ? " +
                 "ORDER BY ((latitude - ?) * (latitude - ?) + (longitude - ?) * (longitude - ?)) ASC";
 
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setString(1, type.name());
-            stmt.setLong(2, excludeId != null ? excludeId : -1L);
-            stmt.setDouble(3, lat);
+            stmt.setLong(1, reservedByDriverId != null ? reservedByDriverId : -1L);
+            stmt.setString(2, type.name());
+            stmt.setLong(3, excludeId != null ? excludeId : -1L);
             stmt.setDouble(4, lat);
-            stmt.setDouble(5, lng);
+            stmt.setDouble(5, lat);
             stmt.setDouble(6, lng);
+            stmt.setDouble(7, lng);
             return executePreparedStatementToList(stmt);
         } catch (SQLException e) {
             throw new RuntimeException("Errore ricerca stazioni vicine", e);
