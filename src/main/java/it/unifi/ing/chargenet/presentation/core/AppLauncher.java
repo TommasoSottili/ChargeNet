@@ -16,27 +16,22 @@ import it.unifi.ing.chargenet.presentation.navigation.NavigationManager;
 import it.unifi.ing.chargenet.dao.postgres.DatabaseManager;
 import javafx.application.Application;
 import javafx.stage.Stage;
-import org.h2.tools.Server;
 
 import java.sql.SQLException;
 
 public class AppLauncher extends Application {
 
     public static Stage primaryStage;
-    private Server h2WebServer;
 
     @Override
     public void start(Stage stage) {
         try {
             primaryStage = stage;
 
-            h2WebServer = Server.createWebServer("-web", "-webAllowOthers", "-webPort", "8082").start();
-            System.out.println("🌐 Console H2: http://localhost:8082 (JDBC: jdbc:h2:mem:chargenet)");
-
             DaoFactory daoFactory = new PostgresDaoFactory();
             NavigationManager.initialize(primaryStage, daoFactory);
 
-            // 1. Schema + seed (una volta sola)
+            // 1. Schema + seed (idempotente: schema se manca, seed se DB vuoto)
             DatabaseManager.initializeSchema();
 
             // 2. Inizializza il GridCluster leggendo trasformatori e stazioni dal DB.
@@ -77,7 +72,7 @@ public class AppLauncher extends Application {
             NavigationManager.navigateTo("LOGIN");
 
         } catch (SQLException e) {
-            System.err.println("❌ Errore fatale H2/DB.");
+            System.err.println("❌ Errore fatale di connessione/DB.");
             e.printStackTrace();
         } catch (Exception e) {
             System.err.println("❌ Errore fatale durante l'avvio.");
@@ -87,12 +82,8 @@ public class AppLauncher extends Application {
 
     @Override
     public void stop() {
-        System.out.println("🛑 Applicazione in fase di chiusura. Rilascio risorse...");
-        if (h2WebServer != null) {
-            h2WebServer.stop();
-            System.out.println("🔌 Server web H2 spento.");
-        }
-        System.out.println("👋 Risorse rilasciate con successo. Chiusura JVM.");
+        System.out.println("🛑 Applicazione in chiusura. Rilascio risorse...");
+        System.out.println("👋 Chiusura JVM.");
     }
 
     public static void main(String[] args) {
