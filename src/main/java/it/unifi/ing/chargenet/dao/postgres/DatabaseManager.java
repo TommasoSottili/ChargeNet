@@ -13,10 +13,9 @@ import java.math.RoundingMode;
 
 public class DatabaseManager {
 
-    private static final String URL =
-            "jdbc:h2:mem:chargenet;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE";
-    private static final String USER = "sa";
-    private static final String PASSWORD = "";
+    private static final String URL = "jdbc:postgresql://localhost:5432/chargenet";
+    private static final String USER = "chargenet";
+    private static final String PASSWORD = "chargenet";
 
     /** Quota piattaforma applicata alle colonnine seed (coerente con insertStation). */
     private static final double TARIFF_PLATFORM = 0.05;
@@ -41,16 +40,31 @@ public class DatabaseManager {
                 throw new RuntimeException(
                         "scheme.sql non trovato nel classpath (atteso in src/main/resources/scheme.sql)");
             }
+            // CREATE TABLE IF NOT EXISTS → sicuro anche se le tabelle esistono già
             String script = new String(is.readAllBytes(), StandardCharsets.UTF_8);
             for (String s : script.split(";")) {
                 if (!s.trim().isEmpty()) stmt.execute(s);
             }
-            System.out.println("[DatabaseManager] Schema inizializzato.");
+            System.out.println("[DatabaseManager] Schema verificato.");
 
-            seedData(conn);
+            // Seed SOLO se il DB è vuoto: con Postgres i dati persistono,
+            // ri-seedare a ogni avvio duplicherebbe tutto (e violerebbe UNIQUE su email).
+            if (isDatabaseEmpty(conn)) {
+                seedData(conn);
+                System.out.println("[DatabaseManager] Seed inserito.");
+            } else {
+                System.out.println("[DatabaseManager] DB già popolato, seed saltato.");
+            }
 
         } catch (Exception e) {
             throw new RuntimeException("Errore inizializzazione schema DB", e);
+        }
+    }
+
+    private static boolean isDatabaseEmpty(Connection conn) throws SQLException {
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM users")) {
+            return rs.next() && rs.getInt(1) == 0;
         }
     }
 
@@ -126,8 +140,6 @@ public class DatabaseManager {
                             "  WHERE s.operator_id = users.id AND cs.status = 'COMPLETED'" +
                             "), 0) WHERE role = 'STATION_OPERATOR'");
         }
-
-        System.out.println("[DatabaseManager] Seed ricco inserito. Login: driver@/operator@/manager@chargenet.it, pwd 'password'.");
     }
 
     // ==========================================================================
