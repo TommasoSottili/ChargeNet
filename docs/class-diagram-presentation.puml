@@ -1,260 +1,343 @@
-@startuml ChargeNet_Presentation_Layer
+@startuml Presentation_Package_Full
+title ChargeNet — Presentation
 
-skinparam ClassAttributeIconSize 0
-skinparam Shadowing false
-skinparam RoundCorner 10
-skinparam Nodesep 60
-skinparam Ranksep 80
-skinparam DefaultFontName Arial
-skinparam DefaultFontSize 12
-skinparam BorderColor #333333
-skinparam ArrowColor #333333
-skinparam Linetype ortho
-
-top to bottom direction
+skinparam linetype ortho
+skinparam packageStyle folder
+skinparam classAttributeIconSize 0
+hide empty members
 
 skinparam class {
-  BackgroundColor #FFFFFF
+    BackgroundColor #FFFFFF
 }
 
-skinparam package {
-  BorderColor #8c8c8c
-  FontStyle bold
+' ============================================================
+'                     CONFINI ESTERNI
+' ============================================================
+package javafx #E1D5E7 {
+     package application <<external>> #F0F4F8 {
+    abstract class Application
+     }
+}
+interface "Thread.UncaughtExceptionHandler" as UEH <<external>>
+package "business\n(Service, GridCluster, GridMonitor)" as business <<layer>> {
 }
 
-package "presentation" {
+' ============================================================
+'                  PACKAGE SOTTO ESAME
+' ============================================================
+package presentation #f9e8e7 {
 
-    package "core & infrastructure" as core {
-        
-        class AppLauncher <<Application>> {
-            + {static} primaryStage: Stage
-            + start(stage: Stage): void
-            + stop(): void
-            + main(args: String[]): void
+    ' ------------------------------------------------------
+    '                        core
+    ' ------------------------------------------------------
+    package core #F0F4F8 {
+        class AppLauncher {
+            + {static} primaryStage : Stage
+            + start(stage : Stage)
+            + stop()
+            + {static} main(args : String[])
         }
-
-        class GlobalExceptionHandler <<ExceptionHandler>> {
-            + uncaughtException(t: Thread, e: Throwable): void
-            - showErrorDialog(t: Thread, e: Throwable): void
-        }
-
-        package "navigation" {
-            class NavigationManager <<Utility>> {
-                - {static} FXML_MAP: Map<String, String>
-                + {static} navigateTo(viewName: String): void
-                + {static} navigateToWithController(viewName: String): T
-            }
-        }
-
-        package "session" {
-            class SessionContext <<State>> {
-                - {static} currentUser: User
-                + {static} setCurrentUser(user: User): void
-                + {static} getCurrentUser(): User
-                + {static} logout(): void
-            }
-
-            interface SessionUpdateListener <<Interface>> {
-                + onTick(): void
-            }
+        class GlobalExceptionHandler {
+            + uncaughtException(t : Thread, e : Throwable)
         }
     }
 
-    package "controller" {
-        
-        package "auth" {
-            class WelcomeController <<Controller>> {
-                - loginBtn: Button
-                - registerBtn: Button
-                + initialize(): void
-                - goToLogin(): void
-                - goToRegister(): void
-            }
+    ' ------------------------------------------------------
+    '                     navigation
+    ' ------------------------------------------------------
+    package navigation #F0F4F8 {
+        class NavigationManager {
+            + {static} initialize(stage, daoFactory)
+            + {static} navigateTo(key : String)
+            + {static} getCurrentUser() : User
+            + {static} loginUser(user : User)
+            + {static} logout()
+            .. Service Locator ..
+            + {static} getAuthService() : AuthService
+            + {static} getSessionService() : SessionService
+            + {static} getStationService() : StationService
+            + {static} getValidationService() : ValidationService
+            + {static} getRatingService() : RatingService
+            + {static} getWalletService() : WalletService
+            + {static} getDriverService() : DriverService
+            + {static} getDaoFactory() : DaoFactory
+        }
+    }
 
-            class LoginController <<Controller>> {
-                - emailField: TextField
-                - passwordField: PasswordField
-                - errorLabel: Label
-                - authService: AuthService
-                + initialize(): void
-                - handleLogin(): void
-                - goBack(): void
-            }
+    ' ------------------------------------------------------
+    '                      controller
+    ' ------------------------------------------------------
+    package controller #F0F4F8 {
 
-            class RegisterController <<Controller>> {
-                - nameField: TextField
-                - emailField: TextField
-                - passwordField: PasswordField
-                - roleCombo: ComboBox<Role>
-                - authService: AuthService
-                + initialize(): void
-                - handleRegister(): void
-                - goBack(): void
-            }
+        ' ==================== AUTENTICAZIONE ====================
+        class LoginController {
+            - authService : AuthService
+            --
+            + initialize()
+            - handleLogin(e : ActionEvent)
+            - routeByRole(user : User)
+            - goToRegister(e : MouseEvent)
+            - showAlert(type : AlertType, title : String, content : String)
         }
 
-        package "driver" {
-            class DriverMenuController <<Controller>> {
-                - contentArea: BorderPane
-                + initialize(): void
-                - showBrowseStations(): void
-                - showWallet(): void
-                - showHistory(): void
-            }
-
-            class BrowseStationsController <<Controller>> {
-                - stationsTable: TableView<ChargingStation>
-                - holdButton: Button
-                - startSessionButton: Button
-                - stationService: StationService
-                + initialize(): void
-                - loadStations(): void
-                - handleHold(): void
-                - handleStartSession(): void
-            }
-
-            class ActiveSessionController <<Controller>> {
-                - batteryBar: ProgressBar
-                - kwhLabel: Label
-                - costLabel: Label
-                - currentSession: ChargingSession
-                - sessionService: SessionService
-                + initSession(session: ChargingSession): void
-                + onTick(): void
-                - updateDisplay(): void
-                - handleCloseSession(): void
-            }
-
-            class WalletController <<Controller>> {
-                - balanceLabel: Label
-                - planCombo: ComboBox<SubscriptionPlan>
-                - transactionsTable: TableView<Transaction>
-                - walletService: WalletService
-                + initialize(): void
-                - loadWalletData(): void
-                - handleFundWallet(): void
-                - handleChangePlan(): void
-            }
-
-            class ChargingHistoryController <<Controller>> {
-                - historyTable: TableView<ChargingSession>
-                - sessionService: SessionService
-                + initialize(): void
-                - loadHistory(): void
-            }
+        class RegisterController {
+            - authService : AuthService
+            --
+            + initialize()
+            - handleRegister(e : ActionEvent)
+            - onRoleChanged()
+            - goToLogin(e : MouseEvent)
+            - showAlert(type : AlertType, title : String, content : String)
         }
 
-        package "operator" {
-            class OperatorMenuController <<Controller>> {
-                - stationsTable: TableView<ChargingStation>
-                - earningsLabel: Label
-                - stationService: StationService
-                + initialize(): void
-                - loadDashboard(): void
-                - goToRegisterStation(): void
-            }
-
-            class RegisterStationController <<Controller>> {
-                - nameField: TextField
-                - powerField: TextField
-                - connectorCombo: ComboBox<ConnectorType>
-                - stationService: StationService
-                + initialize(): void
-                - handleSubmit(): void
-                - goBack(): void
-            }
+        ' ======================== DRIVER ========================
+        class DriverMenuController {
+            - loggedDriver : Driver
+            - sessionService : SessionService
+            --
+            + initialize()
+            + initData(driver : Driver)
+            - refreshResumeCard(driver : Driver)
+            - handleUpdateLocation(e : ActionEvent)
+            - goToStationExplorer(e : MouseEvent)
+            - goToFundWallet(e : MouseEvent)
+            - goToHistory(e : MouseEvent)
+            - goToAccount(e : MouseEvent)
+            - handleLogout(e : MouseEvent)
+            - goToActiveSession(e : MouseEvent)
+            - showAlert(type : AlertType, title : String, content : String)
         }
 
-        package "manager" {
-            class ManagerDashboardController <<Controller>> {
-                - tabPane: TabPane
-                - pendingTable: TableView<ChargingStation>
-                - alertsTable: TableView<RatingAlert>
-                - transformersTable: TableView<PowerTransformer>
-                - validationService: ValidationService
-                - ratingService: RatingService
-                + initialize(): void
-                - loadPending(): void
-                - loadAlerts(): void
-                - loadTransformers(): void
-                - handleApprove(): void
-                - handleResolveAlert(): void
-            }
+        class StationExplorerController {
+            - loggedDriver : Driver
+            - stationService : StationService
+            --
+            + initialize()
+            + initData(driver : Driver)
+            - loadStations()
+            - createStationCard(station : ChargingStation) : VBox
+            - formatDistance(station : ChargingStation) : String
+            - handleChargeNow(station : ChargingStation)
+            - handleSmartBook(station : ChargingStation)
+            - goBack(e : MouseEvent)
+            - showAlert(type : AlertType, title : String, content : String)
+        }
+
+        class LiveSessionController {
+
+            - loggedDriver : Driver
+            - station : ChargingStation
+            - session : ChargingSession
+            - sessionService : SessionService
+            - ratingService : RatingService
+            - sessionId : Long
+            - selectedRating : int
+            --
+            + initData(driver : Driver, station : ChargingStation)
+            + initialize()
+            - startSimulation()
+            - enterLiveMode(activeSession : ChargingSession)
+            - startPolling()
+            - refreshFromDb()
+            - stopCharging()
+            - onSessionEnded()
+            - handleStarN(e : MouseEvent)  ' N = 1..5
+            - updateStarColors(rating : int)
+            - submitRating()
+            - skipRating()
+            - closeAndReturn()
+            - goBack(e : MouseEvent)
+            - updateWallet(balance : BigDecimal)
+            - showAlert(type : AlertType, title : String, content : String)
+        }
+
+        class FundWalletController {
+            - loggedDriver : Driver
+            - walletService : WalletService
+            - selectedAmount : BigDecimal
+            --
+            + initialize()
+            - selectPreset10(e : ActionEvent)
+            - selectPreset20(e : ActionEvent)
+            - selectPreset50(e : ActionEvent)
+            - setPreset(amount : BigDecimal, chosen : Button)
+            - clearPresetHighlight()
+            - updateTotal()
+            - confirmAndPay(e : ActionEvent)
+            - goBack(e : MouseEvent)
+            - showBalance(balance : BigDecimal)
+            - showAlert(type : AlertType, title : String, content : String)
+        }
+
+        class ChargingHistoryController {
+            - loggedDriver : Driver
+            - sessionService : SessionService
+            --
+            + initialize()
+            - loadHistory()
+            - createSessionCard(s : ChargingSession) : HBox
+            - goBack(e : MouseEvent)
+        }
+
+        class AccountController {
+            - loggedDriver : Driver
+            - walletService : WalletService
+            - selectedPlan : SubscriptionPlan
+            --
+            + initialize()
+            - renderFromDriver()
+            - planDescription(plan : SubscriptionPlan) : String
+            - selectBasic(e : MouseEvent)
+            - selectPlus(e : MouseEvent)
+            - selectPremium(e : MouseEvent)
+            - choose(plan : SubscriptionPlan)
+            - highlightSelection(plan : SubscriptionPlan)
+            - style(card : VBox, selected : boolean)
+            - applyPlanChange()
+            - goToFundWallet(e : MouseEvent)
+            - goBack(e : MouseEvent)
+            - showAlert(type : AlertType, title : String, content : String)
+        }
+
+        ' ======================= OPERATOR =======================
+        class OperatorMenuController {
+            - loggedOperator : StationOperator
+            - sessionService : SessionService
+            --
+            + initialize()
+            - loadDashboardData()
+            - goToHub()
+            - goToReports()
+            - logOut()
+        }
+
+        class StationHubController {
+            - loggedOperator : StationOperator
+            - stationService : StationService
+            --
+            + initialize()
+            - loadOperatorStations()
+            - createOperatorStationCard(station : ChargingStation) : VBox
+            - goToOnboard(e : MouseEvent)
+            - goBack(e : MouseEvent)
+        }
+
+        class NewStationController {
+            - loggedOperator : StationOperator
+            - stationService : StationService
+            --
+            + initialize()
+            - handleDeploy(e : MouseEvent)
+            - clearFields()
+            - goBack(e : MouseEvent)
+            - showAlert(title : String, content : String)
+        }
+
+        class FinancialReportsController {
+            - loggedOperator : StationOperator
+            - sessionService : SessionService
+            --
+            + initialize()
+            - loadFinancialData()
+            - goBack(e : MouseEvent)
+        }
+
+        ' ==================== ENERGY MANAGER ====================
+        class EnergyManagerMenuController {
+            - stationService : StationService
+            --
+            + initialize()
+            - loadDashboardData()
+            - goToApprovalQueue(e : MouseEvent)
+            - goToRatingIncidents(e : MouseEvent)
+            - goToGridDashboard(e : MouseEvent)
+            - logOut()
+        }
+
+        class StationApprovalQueueController {
+            - stationService : StationService
+            - validationService : ValidationService
+            --
+            + initialize()
+            - loadQueue()
+            - buildStationCard(s : ChargingStation) : VBox
+            - statCell(caption : String, value : String) : VBox
+            - buildEmptyState() : Label
+            - operatorLabel(s : ChargingStation) : String
+            - connectorLabel(t : ConnectorType) : String
+            - onApprove(s : ChargingStation)
+            - onReject(s : ChargingStation)
+            - askPlatformTariff(s : ChargingStation) : Optional<BigDecimal>
+            - goBack(e : MouseEvent)
+            - showError(title : String, msg : String)
+            - rootMessage(e : Throwable) : String
+        }
+
+        class RatingIncidentManagerController {
+            - ratingService : RatingService
+            --
+            + initialize()
+            - loadAlerts()
+            - buildAlertCard(a : RatingAlert) : VBox
+            - buildEmptyState() : Label
+            - stationLabel(a : RatingAlert) : String
+            - ratingSummary(avg : double) : String
+            - relativeTime(created : LocalDateTime) : String
+            - severityText(avg : double) : String
+            - severityStyle(avg : double) : String
+            - onSuspend(a : RatingAlert)
+            - onDismiss(a : RatingAlert)
+            - askNotes(title : String, header : String) : Optional<String>
+            - goBack(e : MouseEvent)
+            - showError(title : String, msg : String)
+            - rootMessage(e : Throwable) : String
+        }
+
+        class GridReliabilityDashboardController {
+            --
+            + initialize()
+            - startPolling()
+            - refresh()
+            - buildTransformerCard(t : PowerTransformer) : VBox
+            - buildEmptyState() : Label
+            - transformerLabel(t : PowerTransformer) : String
+            - loadColor(load : double, alert : boolean) : String
+            - setStatus(text : String, colorHex : String)
+            - goBack(e : MouseEvent)
         }
     }
 }
 
-package "business" {
-    package "services" {
-        class AuthService <<Service>>
-        class StationService <<Service>>
-        class SessionService <<Service>>
-        class ValidationService <<Service>>
-        class RatingService <<Service>>
-        class WalletService <<Service>>
-    }
-}
+' ============================================================
+'                        RELAZIONI
+' ============================================================
+AppLauncher --|> Application
+GlobalExceptionHandler ..|> UEH
 
-' ==========================================
-' FORZATURA SPAZIALE FRA I BLOCCHI PRINCIPALI
-' ==========================================
-core -[hidden]right- controller
-controller -[hidden]right- business
+AppLauncher ..> NavigationManager      : initialize / navigateTo("LOGIN")
+AppLauncher ..> GlobalExceptionHandler : registra come handler globale
+AppLauncher ..> business               : init GridCluster,\nGridMonitor, Observer
 
-'Compattazione interna a controller
-operator -[hidden]down- driver
-driver -[hidden]down- auth
+controller ..> navigation : Service Locator\n(getCurrentUser, getXxxService, navigateTo)
+navigation ..> business   : risolve i Service
 
-'Compattazione interna a core
-session -[hidden]right- navigation
+' ============================================================
+'                          NOTE
+' ============================================================
+note bottom of navigation
+    NavigationManager NON dipende dalle classi
+    dei controller: carica gli FXML per chiave→path,
+    e JavaFX istanzia il controller via reflection.
+    La dipendenza di codice è a senso unico:
+    controller → navigation.
+end note
 
-' ==========================================
-' RELAZIONI EFFETTIVE (Tratteggiate per Loose Coupling)
-' ==========================================
-
-AppLauncher ..> GlobalExceptionHandler : <<registers>>
-AppLauncher ..> NavigationManager : <<uses>>
-
-' --- AUTH ---
-WelcomeController ..> NavigationManager : <<routes>>
-
-LoginController ..> NavigationManager : <<routes>>
-LoginController ..> SessionContext : <<sets>>
-LoginController ..> AuthService : <<uses>>
-
-RegisterController ..> NavigationManager : <<routes>>
-RegisterController ..> AuthService : <<uses>>
-
-' --- DRIVER ---
-DriverMenuController ..> NavigationManager : <<routes>>
-
-BrowseStationsController ..> NavigationManager : <<routes>>
-BrowseStationsController ..> SessionContext : <<gets>>
-BrowseStationsController ..> StationService : <<uses>>
-
-ActiveSessionController ..> NavigationManager : <<routes>>
-ActiveSessionController ..> SessionContext : <<gets>>
-ActiveSessionController ..|> SessionUpdateListener : <<implements>>
-ActiveSessionController ..> SessionService : <<uses>>
-
-WalletController ..> SessionContext : <<gets>>
-WalletController ..> WalletService : <<uses>>
-
-ChargingHistoryController ..> SessionContext : <<gets>>
-ChargingHistoryController ..> SessionService : <<uses>>
-
-' --- OPERATOR ---
-OperatorMenuController ..> NavigationManager : <<routes>>
-OperatorMenuController ..> SessionContext : <<gets>>
-OperatorMenuController ..> StationService : <<uses>>
-
-RegisterStationController ..> NavigationManager : <<routes>>
-RegisterStationController ..> SessionContext : <<gets>>
-RegisterStationController ..> StationService : <<uses>>
-
-' --- MANAGER ---
-ManagerDashboardController ..> NavigationManager : <<routes>>
-ManagerDashboardController ..> ValidationService : <<uses>>
-ManagerDashboardController ..> RatingService : <<uses>>
+note as N1
+    Tutti i controller dipendono da NavigationManager
+    (Service Locator): getCurrentUser(), getXxxService(),
+    navigateTo(...). Le frecce dai singoli controller sono
+    riassunte nell'unica dipendenza  controller → navigation
+    per leggibilità.
+end note
 
 @enduml

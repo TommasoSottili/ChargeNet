@@ -33,7 +33,7 @@ skinparam package {
 '  PACKAGE ESTERNI
 ' ══════════════════════════════════════════════
 
-package "business" as PKG_BUSINESS #FFFFFF {
+package "business" as PKG_BUSINESS #fce3bd {
     class LoadBalancerService {
         + update(src: Subject, e: TransformerEvent): void
     }
@@ -46,7 +46,7 @@ package "business" as PKG_BUSINESS #FFFFFF {
     }
 }
 
-package " dao" as PKG_DAO  #FFFFFF{
+package " dao" as PKG_DAO  #d3f4d7 {
     interface UserDao {
         + findByEmail(email: String): User
     }
@@ -62,12 +62,12 @@ package " dao" as PKG_DAO  #FFFFFF{
 ' ══════════════════════════════════════════════
 '  PACKAGE DOMAIN
 ' ══════════════════════════════════════════════
-package "domain" as PKG_DOMAIN #FFFFFF {
+package "domain" as PKG_DOMAIN #dce7f0 {
 
     ' ─────────────────────────────────────────
     '  SUB-PACKAGE: observer
     ' ─────────────────────────────────────────
-    package "observer" as PKG_OBSERVER #FFFFFF {
+    package "observer" as PKG_OBSERVER #F0F4F8 {
 
         interface Subject {
             + attach(o: Observer): void
@@ -88,124 +88,125 @@ package "domain" as PKG_DOMAIN #FFFFFF {
     ' ─────────────────────────────────────────
     '  SUB-PACKAGE: users
     ' ─────────────────────────────────────────
-    package "users" as PKG_USERS #FFFFFF {
+    package "users" as PKG_USERS #F0F4F8 {
 
         abstract class User <<abstract>> {
-            - id: int
+            - id: Long
             - name: String
             - email: String
             - passwordHash: String
             - role: Role
-            
-            # User(id, name, email, pwd)
-            + {abstract} getRole(): Role
-            + getId(): int
+
+            + User(id, name, email, pwd, role)
+            + getRole(): Role
+            + getId(): Long
             + getName(): String
             + getEmail(): String
+            + getPassword(): String
         }
 
         class Driver {
-            - latitude: double
-            - longitude: double
+            - latitude: Double
+            - longitude: Double
             - connectorType: ConnectorType
             - subscriptionPlan: SubscriptionPlan
-            - batteryCapacity: double
-            - walletBalance: double
-            - batteryPercentage: double
-            
-            + getRole(): Role
+            - batteryCapacity: Double
+            - walletBalance: BigDecimal
+
             + getDiscount(): double
-            + hasSufficientBalance(amount: double): boolean
-            + charge(amount: double): void
-            + refund(amount: double): void
-            + updatePlan(plan: SubscriptionPlan): void
+            + hasSufficientBalance(amount: BigDecimal): boolean
+            + charge(amount: BigDeciaml): void
+            + refund(amount: BigDecimal): void
+            + updatePlan(newPlan: SubscriptionPlan): void
+            + updatePosition(latitude: double, longitude: double): void
         }
 
         class StationOperator {
-            - totalEarnings: double
-            
-            + getRole(): Role
-            + addEarnings(amount: double): void
-            + getTotalEarnings(): double
+            - totalEarnings: BigDecimal
+
+            + addEarnings(amount: BigDeciaml): void
+
         }
 
         class EnergyManager {
-            + getRole(): Role
         }
 
         together{
             enum Role {
-            DRIVER
-            STATION_OPERATOR
-            ENERGY_MANAGER
+                DRIVER
+                STATION_OPERATOR
+                ENERGY_MANAGER
             }
 
             enum SubscriptionPlan <<(E) rich>> {
                 BASIC
                 PLUS
                 PREMIUM
-                
-                + getDiscount(): double
-                + getMonthlyFee(): double
+                --
+                 - discount: double
+                 - monthlyFee: BigDecimal
+
             }
 
             enum ConnectorType <<(E) rich>> {
-                TYPE2
-                CCS
+                TYPE_2
+                CCS_2
                 CHADEMO
-                
-                + getMaxPowerKw(): double}
-            
+                --
+                - maxPowerKw: double
             }
         }
 
         ' Disposizione layout package users
         User -[hidden]down-> StationOperator
         User -[hidden]down-> EnergyManager
-        User -[hidden]down-> Driver 
+        User -[hidden]down-> Driver
         Role -[hidden]left-> ConnectorType
     }
 
     ' ─────────────────────────────────────────
     '  SUB-PACKAGE: infrastructure
     ' ─────────────────────────────────────────
-    package "infrastructure" as PKG_INFRA #FFFFFF {
+    package "infrastructure" as PKG_INFRA #F0F4F8 {
 
         class PowerTransformer {
-            - id: int
+            - id: Long
             - name: String
             - temperature: double
             - loadPercent: double
             - observers: List<Observer>
-            
+            - MAX_HEAT_PER_TICK: double = 30.0 {static}
+
             + simulateTick(totalHeatIncrement: double): void
             + isInThermalAlert(): boolean
             + attach(o: Observer): void
             + detach(o: Observer): void
             + notifyObservers(e: TransformerEvent): void
-            + getTemperature(): double
         }
 
         class ChargingStation {
-            - id: int
+            - id: Long
             - name: String
             - address: String
-            - latitude: double
-            - longitude: double
-            - powerKw: double
+            - latitude: Double
+            - longitude: Double
+            - powerKw: Double
             - isSolarPowered: boolean
-            - tariffOperator: double
-            - tariffPlatform: double
-            - averageRating: double
-            - totalRatings: int
+            - tariffOperator: BigDecimal
+            - tariffPlatform: BigDeciaml
+            - averageRating: Double
+            - totalRatings: Integer
             - status: StationStatus
-              ...
-            
+            - expirationTimeStamp: LocalDateTime
+            - connectorType: ConnectorType
+            - reservedBy: Driver
+
+
             + {static} register(...): ChargingStation
-            + isAvailableFor(t: ConnectorType): boolean
-            + isReservedBy(d: Driver): boolean
-            + getTotalTariff(): double
-            + activate(platformTariff: double): void
+            + isAvailableFor(type: ConnectorType): boolean
+            + isReservedBy(driver: Driver): boolean
+            + activate(platformTariff: BigDecimal): void
+            + priceFor(kwh: double, driver: Driver): BigDecimal
             + reject(): void
             + setReserved(d: Driver): void
             + cancelHold(): void
@@ -213,7 +214,8 @@ package "domain" as PKG_DOMAIN #FFFFFF {
             + setActive(): void
             + setOverloaded(): void
             + setSuspended(): void
-            + updateRating(stars: int): void
+            + updateRating(newStars: int): void
+            + clearReservation(): void
         }
 
         enum StationStatus {
@@ -225,26 +227,43 @@ package "domain" as PKG_DOMAIN #FFFFFF {
             SUSPENDED
             REJECTED
         }
+
+        enum Zone {
+            CENTRO_STORICO
+            NOVOLI
+            CAMPO_DI_MARTE
+            RIFREDI
+            GAVINANA
+            ISOLOTTO
+            COVERCIANO
+            --
+            - lable: String
+            - baseLat: double
+            - baseLng: double
+           --
+            + resolveWithJitter(): double[]
+            + toString(): String
+         }
     }
 
     ' ─────────────────────────────────────────
     '  SUB-PACKAGE: sessions
     ' ─────────────────────────────────────────
-    package "sessions" as PKG_SESSIONS #FFFFFF {
+    package "sessions" as PKG_SESSIONS #F0F4F8 {
 
         class ChargingSession {
-            - id: int
+            - id: Long
             - strategyUsed: ChargingType
-            - batteryStart: double
-            - batteryCurrent: double
-            - kwhDelivered: double
-            - costTotal: double
+            - batteryStart: Double
+            - batteryCurrent: Double
+            - kwhDelivered: Double
+            - costTotal: BigDecimal
             - status: SessionStatus
             - openedAt: LocalDateTime
             - closedAt: LocalDateTime
-            
+
             + {static} open(...): ChargingSession
-            + addTick(kwh: double, cost: double): void
+            + addTick(kwhThisTick: Double, costThisTick: BigDecimal): void
             + complete(): void
             + interrupt(): void
             + isActive(): boolean
@@ -257,7 +276,7 @@ package "domain" as PKG_DOMAIN #FFFFFF {
         }
 
         enum ChargingType {
-            FAST 
+            FAST
             ECO
         }
     }
@@ -265,20 +284,17 @@ package "domain" as PKG_DOMAIN #FFFFFF {
     ' ─────────────────────────────────────────
     '  SUB-PACKAGE: financials
     ' ─────────────────────────────────────────
-    package "financials" as PKG_FINANCE #FFFFFF {
+    package "financials" as PKG_FINANCE #F0F4F8 {
 
         class Transaction <<immutable>> {
-            - {final} driver: Driver
-            - {final} type: TransactionType
-            - {final} amount: double
-            - {final} kwh: double
-            - {final} description: String
-            - {final} createdAt: LocalDateTime
-            
+            - id: Long
+            - type: TransactionType
+            - amount: BigDeciaml
+            - kwh: Double
+            - description: String
+            - createdAt: LocalDateTime
+
             + {static} create(...): Transaction
-            + getDriver(): Driver
-            + getAmount(): double
-            + getType(): TransactionType
         }
 
         enum TransactionType {
@@ -292,29 +308,24 @@ package "domain" as PKG_DOMAIN #FFFFFF {
     ' ─────────────────────────────────────────
     '  SUB-PACKAGE: feedback
     ' ─────────────────────────────────────────
-    package "feedback" as PKG_FEEDBACK #FFFFFF {
+    package "feedback" as PKG_FEEDBACK #F0F4F8 {
 
         class Rating <<immutable>> {
-            - {final} driver: Driver
-            - {final} station: ChargingStation
-            - {final} session: ChargingSession
-            - {final} stars: int
-            - {final} comment: String
-            - {final} createdAt: LocalDateTime
-            
+            - id: Long
+            - stars: Integer
+            - comment: String
+            - createdAt: LocalDateTime
+
             + {static} leave(...): Rating
-            + getStars(): int
-            + getComment(): String
         }
 
         class RatingAlert {
-            - id: int
-            - station: ChargingStation
-            - avgAtCreation: double
+            - id: Long
+            - avgAtCreation: Double
             - status: RatingAlertStatus
             - managerNote: String
             - createdAt: LocalDateTime
-            
+
             + {static} create(...): RatingAlert
             + resolveSuspend(note: String): void
             + resolveIgnore(note: String): void
@@ -342,32 +353,33 @@ package "domain" as PKG_DOMAIN #FFFFFF {
     User <|-- EnergyManager
 
     ' Infrastructure
-    StationOperator "1" --> "1..*" ChargingStation    
-    PowerTransformer "1" -left-> "1..*" ChargingStation   
-    ChargingStation -left-> StationStatus                 
+    StationOperator "1" --> "1..*" ChargingStation
+    PowerTransformer "1" -left-> "1..*" ChargingStation
+    ChargingStation -left-> StationStatus
     ChargingStation "1" --> "0..1" Driver                 : reservedBy >
 
     ' Sessions
-    Driver "1" -up-> "*" ChargingSession              
+    Driver "1" -up-> "*" ChargingSession
     ChargingStation "1" -left-> "*" ChargingSession       : hosts >
-    ChargingSession -left-> SessionStatus 
-    ChargingSession -right-> ChargingType : <<uses>>                
+    ChargingSession -left-> SessionStatus
+    ChargingSession -right-> ChargingType : <<uses>>
 
     ' Financials
     Driver "  1" *--> "*" Transaction                     : has >
-    Transaction -left-> TransactionType                   
+    Transaction -left-> TransactionType
 
     ' Feedback
-    Driver " 1  " -down-> "*" Rating                      
-    ChargingStation "1" --> "*" Rating                 
+    Driver " 1  " -down-> "*" Rating
+    ChargingStation "1" --> "*" Rating
     ChargingSession "1" -down-> "0..1" Rating             : generates >
     ChargingStation "1" --> "*" RatingAlert               : triggers >
     RatingAlert -left-> RatingAlertStatus                 : «uses»
 
     ' Enum ricchi
-    Driver .up.> ConnectorType                              
-    Driver .up.> SubscriptionPlan                           
-    PowerTransformer .left.> TransformerEvent                 
+    Driver .up.> ConnectorType
+    ChargingStation .up.> ConnectorType
+    Driver .up.> SubscriptionPlan
+    PowerTransformer .left.> TransformerEvent
 
     ' Hidden links per layout quadrato (griglia 2x3)
     PKG_OBSERVER -[hidden]right- PKG_USERS
@@ -387,12 +399,12 @@ package "domain" as PKG_DOMAIN #FFFFFF {
 ' ══════════════════════════════════════════════
 LoadBalancerService ..|> Observer                         : «implements»
 LoadBalancerService ..> PowerTransformer                  : «observes»
-SessionService ..> ChargingSession                        
-SessionService ..> Driver                                 
-StationService ..> ChargingStation                       
+SessionService ..> ChargingSession
+SessionService ..> Driver
+StationService ..> ChargingStation
 
-StationDao ..> ChargingStation                            
-SessionDao ..> ChargingSession                            
-UserDao ..> User                                          
+StationDao ..> ChargingStation
+SessionDao ..> ChargingSession
+UserDao ..> User
 
 @enduml
