@@ -15,20 +15,33 @@ Per raggiungere questo obiettivo, la piattaforma fa da punto di incontro per tre
 \end{itemize}
 
 \section{Stack Tecnologico}
-Per lo sviluppo è stato scelto un ecosistema Java-centrico, privilegiando 
-la robustezza e la portabilità:
 
 \begin{itemize}
-    \item \textbf{Linguaggio:} Java 21.
-    \item \textbf{Interfaccia Grafica:} JavaFX 21, per una gestione 
-    reattiva delle dashboard dei vari attori.
-    \item \textbf{Persistenza:} PostgreSQL, gestito tramite JDBC per un 
-    controllo granulare delle transazioni.
-    \item \textbf{Build Tool:} Maven, per la gestione delle dipendenze e 
-    del ciclo di vita del software.
+  \item \textbf{Linguaggio}: Java, essendo un linguaggio fortemente orientato agli oggetti, ci ha permesso di modellare in modo chiaro le entità del dominio e le loro interazioni.
+  \item \textbf{Interfaccia grafica}: JavaFX con FXML, che separa il i file \texttt{.fxml} dai \texttt{Controller}.
+  \item \textbf{Persistenza}: database relazionale PostgreSQL. In sviluppo si è
+  usato H2 in modalità \texttt{MODE=PostgreSQL}, così da accettare la stessa
+  sintassi SQL e rendere veloce e semplice il passaggio a PostgreSQL.
+  \item \textbf{Accesso ai dati}: JDBC con query scritte a mano, senza ORM,
+  per controllo esplicito della traduzione oggetti/tabelle.
+  \item \textbf{Sicurezza}: password protette con hash BCrypt.
+  \item \textbf{Build e dipendenze}: Maven.
+  \item \textbf{Test}: JUnit 5 con Mockito per l'isolamento tramite mock.
 \end{itemize}
 
-\section{Astrazione dell'Infrastruttura Fisica}
-Trattandosi di un progetto universitario, l'applicazione non comunica con colonnine e trasformatori reali. Nel mondo reale, infatti, interfacciarsi con l'hardware fisico è un'operazione che porta con sé diverse complicazioni: bisogna gestire le differenze tra i vari produttori, adattarsi a protocolli di rete specifici e gestire i fisiologici ritardi o cadute di connessione dei sensori.
+ 
 
-L'architettura del sistema è stata comunque pensata per un'eventuale integrazione futura. Per le finalità di questo progetto, i dati sui consumi e sullo stato delle stazioni vengono semplicemente simulati da un componente interno al programma (\textit{GridMonitor}). 
+\section{Semplificazioni consapevoli}
+
+Trattandosi di un progetto universitario e viste chiare limitazioni di risorse, sono state adottate delle semplificazioni, con le quali comunque si è cercato di replicare un sistema effettivamente pronto all'utilizzo nel mondo reale. Seguono alcune delle scelte più significative, che hanno permesso di ridurre la complessità senza compromettere la logica del sistema:
+
+\begin{itemize}
+\item La geolocalizzazione non deriva da un
+indirizzo reale ma dal quartiere scelto (per le colonnine) o da una lettura
+GPS simulata (per il Driver); in produzione si userebbe un servizio di
+geocoding.
+\item La distanza tra due punti è calcolata con formula euclidea, più che sufficiente all'unico scopo di ordinare le colonnine per vicinanza.
+\item Non esiste un sistema di pagamento verso l'esterno: ricariche del portafoglio e guadagni sono movimenti interni.
+\item I coefficienti di calore dei trasformatori
+sono tarati per rendere il surriscaldamento osservabile nell'arco di una dimostrazione, ma la logica del meccanismo (accumulo, soglia, reazione, isteresi) è identica a quella reale.
+\end{itemize}

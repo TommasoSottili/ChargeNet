@@ -1,1 +1,184 @@
 \chapter{Testing}
+
+\section{Strategia di Verifica}
+
+I test sono eseguiti su due livelli:
+
+\begin{itemize}
+    \item \textbf{Livello 1 -- Business Logic}: Service, componenti \texttt{core} (\texttt{GridCluster}, \texttt{GridMonitor}) e Strategy, testati isolando ogni dipendenza esterna con Mockito.
+    \item \textbf{Livello 2 — Persistence Layer}: i DAO Postgres, testati contro un database H2 reale in modalità \texttt{MODE=PostgreSQL}, per verificare che le query SQL scritte a mano funzionino davvero e non solo che le interazioni tra oggetti siano quelle attese.
+\end{itemize}
+
+\subsection{Tecnologie e Strumenti}
+
+\begin{itemize}
+    \item \textbf{JUnit 5}: framework di esecuzione, con le annotazioni \texttt{@BeforeEach}/\texttt{@AfterEach} per il setup e cleanup di ogni test e \texttt{@BeforeAll}/\texttt{@AfterAll} per le risorse costose (come la connessione H2) condivise da un'intera classe.
+    \item \textbf{Mockito}: usato non solo per mockare interfacce (\texttt{StationDao}, \texttt{SessionService}, \dots) ma anche per mockare \textbf{metodi statici} tramite \texttt{Mockito.mockStatic()} — una necessità specifica di questo progetto, perché sia \texttt{DatabaseManager.getConnection()} sia \texttt{GridCluster.getInstance()} sono chiamate statiche che altrimenti aprirebbero una connessione reale o toccherebbero lo stato globale del Singleton durante un test unitario.
+    \item \textbf{H2 in modalità \texttt{MODE=PostgreSQL}}: usato esclusivamente nei test dei DAO, con lo schema reale caricato all'avvio tramite \texttt{INIT=RUNSCRIPT FROM './src/main/resources/scheme.sql'} — lo stesso file \texttt{scheme.sql} usato in produzione, quindi i test verificano le query contro la struttura di tabelle reale, non una sua approssimazione.
+\end{itemize}
+
+\section{Livello 1: Business Logic}
+
+\subsection{Logica pura, senza mock — \texttt{ChargingStrategiesTest}}
+
+Le strategie di ricarica (\texttt{FastChargingStrategy}, \texttt{EcoChargingStrategy}) sono funzioni deterministiche: stesso input, stesso output, nessuna dipendenza esterna. Per questo motivo il loro test non usa Mockito: costruisce oggetti di dominio reali con \texttt{reconstitute()} e confronta il risultato con un secondo calcolo indipendente scritto direttamente nel test, usato come oracolo:
+
+\begin{lstlisting}[language=Java]
+private double basePrice(double kwh, SubscriptionPlan plan) {
+    double discount = (plan != null) ? plan.getDiscount() : 0.0;
+    BigDecimal platAfter = TARIFF_PLAT.multiply(BigDecimal.ONE.subtract(BigDecimal.valueOf(discount)));
+    BigDecimal rate = TARIFF_OP.add(platAfter);
+    return rate.multiply(BigDecimal.valueOf(kwh)).setScale(2, RoundingMode.HALF_UP).doubleValue();
+}
+
+@Test
+void testEcoCalculateCostWithSubscriptionDiscount() {
+    double kwh = 100.0;
+    Driver premiumDriver = testDriver(3L, "Anna", "anna@test.com", SubscriptionPlan.PREMIUM);
+    double expectedPremium = round2(basePrice(kwh, SubscriptionPlan.PREMIUM) * 0.90);
+    assertEquals(expectedPremium, ecoStrategy.calculateCost(kwh, mockStation, premiumDriver), 0.001,
+            "PREMIUM: sconto piano sulla sola quota piattaforma, poi Eco 10%");
+}
+\end{lstlisting}
+
+Riscrivere la formula nel test invece di limitarsi a un valore atteso hardcoded (es. \texttt{assertEquals(33.30, ...)}) ha un vantaggio concreto: se le tariffe di test cambiano, il valore atteso si ricalcola automaticamente insieme a esse, e il test continua a verificare la \emph{relazione} tra i numeri (lo sconto si applica solo alla quota piattaforma) invece di un singolo numero fisso che diventerebbe silenziosamente scorrelato dalla logica reale.
+
+\subsection{Singleton e reset dello stato — \texttt{GridClusterTest}}
+
+\texttt{GridCluster} è un Singleton (Capitolo~\ref{ch:pattern} -- Idiomi e Design Pattern): la sua istanza sopravvive tra un test e l'altro se non viene esplicitamente distrutta, col rischio che i dati caricati da un test "contaminino" il test successivo. La soluzione adottata è azzerare il campo statico \texttt{instance} via reflection prima di ogni test:
+
+\begin{lstlisting}[language=Java]
+@BeforeEach
+void setUp() throws Exception {
+    Field instanceField = GridCluster.class.getDeclaredField("instance");
+    instanceField.setAccessible(true);
+    instanceField.set(null, null);
+
+    gridCluster = GridCluster.getInstance();
+    transformerDaoMock = Mockito.mock(TransformerDao.class);
+    stationDaoMock = Mockito.mock(StationDao.class);
+}
+\end{lstlisting}
+
+Con l'istanza garantita pulita, il test su \texttt{getNearestAvailable()} verifica sia la logica di filtro (solo le colonnine \texttt{ACTIVE}) sia quella di ordinamento (per distanza crescente), usando dati costruiti ad hoc invece di un vero calcolo GPS:
+
+\begin{lstlisting}[language=Java]
+List<ChargingStation> nearest = gridCluster.getNearestAvailable(0.0, 0.0);
+
+assertEquals(2, nearest.size(), "Deve escludere le stazioni non ACTIVE");
+assertEquals("Vicino", nearest.get(0).getName(), "La prima deve essere quella geometricamente piu vicina");
+assertEquals("Lontano", nearest.get(1).getName(), "La seconda deve essere quella piu lontana");
+\end{lstlisting}
+
+\subsection{Service e gestione transazionale — \texttt{DriverServiceTest}, \texttt{LoadBalancerServiceTest}}
+
+I Service che scrivono sul database aprono e chiudono esplicitamente una transazione JDBC (\texttt{setAutoCommit(false)}, poi \texttt{commit()} o \texttt{rollback()} in caso di errore, sempre seguito da \texttt{close()}). Testare questo comportamento richiede di intercettare la connessione prima che il Service la apra davvero — ed è qui che entra in gioco il mock statico:
+
+\begin{lstlisting}[language=Java, caption=Mock statico di DatabaseManager per intercettare la connessione JDBC.]
+@BeforeEach
+void setUp() throws SQLException {
+    connectionMock = mock(Connection.class);
+    mockedDbManager = mockStatic(DatabaseManager.class);
+    mockedDbManager.when(DatabaseManager::getConnection).thenReturn(connectionMock);
+
+    daoFactoryMock = mock(DaoFactory.class);
+    userDaoMock = mock(UserDao.class);
+    when(daoFactoryMock.createUserDao(connectionMock)).thenReturn(userDaoMock);
+
+    driverService = new DriverService(daoFactoryMock);
+}
+
+@AfterEach
+void tearDown() {
+    if (mockedDbManager != null) {
+        mockedDbManager.close();  // fondamentale: rilascia il mock statico globale
+    }
+}
+\end{lstlisting}
+
+Con la connessione sotto controllo, si possono verificare separatamente il percorso di successo e quello di fallimento — due test speculari che verificano esattamente le proprietà opposte sulla stessa transazione:
+
+\begin{lstlisting}[language=Java]
+@Test
+void testUpdateDriverLocation_Success() throws SQLException {
+    Driver mockDriver = mock(Driver.class);
+    driverService.updateDriverLocation(mockDriver, 43.7696, 11.2558);
+
+    verify(mockDriver, times(1)).updatePosition(43.7696, 11.2558);
+    verify(userDaoMock, times(1)).update(mockDriver);
+    verify(connectionMock, times(1)).commit();
+    verify(connectionMock, times(1)).close();
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language=Java]
+@Test
+void testUpdateDriverLocation_Failure() throws SQLException {
+    doThrow(new RuntimeException("Database error")).when(userDaoMock).update(any(Driver.class));
+
+    assertThrows(RuntimeException.class, () ->
+        driverService.updateDriverLocation(mockDriver, 0.0, 0.0));
+
+    verify(connectionMock, times(1)).rollback();
+    verify(connectionMock, times(1)).close();
+    verify(connectionMock, never()).commit();
+}
+\end{lstlisting}
+
+Questa coppia di test è particolarmente significativa perché non si limita a verificare "il metodo non lancia errori": verifica che, in caso di eccezione, il sistema non lasci una transazione a metà — un dettaglio che un test puramente Black-Box (solo sul valore di ritorno) non potrebbe cogliere.
+
+\texttt{LoadBalancerServiceTest} applica la stessa tecnica ma ne combina due insieme, mockando sia \texttt{DatabaseManager} sia il Singleton \texttt{GridCluster} nello stesso test, per isolare completamente la reazione a un evento \texttt{THERMAL\_ALERT}:
+
+\begin{lstlisting}[language=Java, caption=Doppio mock statico: connessione JDBC e Singleton GridCluster.]
+mockedDbManagerStatic = mockStatic(DatabaseManager.class);
+mockedDbManagerStatic.when(DatabaseManager::getConnection).thenReturn(connectionMock);
+
+gridClusterMock = mock(GridCluster.class);
+mockedGridClusterStatic = mockStatic(GridCluster.class);
+mockedGridClusterStatic.when(GridCluster::getInstance).thenReturn(gridClusterMock);
+\end{lstlisting}
+
+Il test sul \texttt{THERMAL\_ALERT} verifica in un colpo solo tre effetti attesi del pattern Observer descritto nel Capitolo~\ref{ch:pattern}: che la colonnina venga marcata come sovraccarica, che la modifica sia persistita, e che la chiusura delle sessioni attive sia \emph{delegata} a \texttt{SessionService} invece di essere gestita internamente:
+
+\begin{lstlisting}[language=Java]
+loadBalancerService.update(transformerMock, TransformerEvent.THERMAL_ALERT);
+
+verify(stationMock, times(1)).setOverloaded();
+verify(stationDaoMock, times(1)).update(stationMock);
+verify(connectionMock, times(1)).commit();
+verify(sessionServiceMock, times(1)).forceClose(sessionMock);
+\end{lstlisting}
+
+L'ultima riga è la più importante: verifica che \texttt{LoadBalancerService} non sappia \emph{come} si chiude una sessione (rimborso, aggiornamento wallet), sappia solo \emph{che} va chiusa — la stessa separazione di responsabilità già discussa a proposito di \texttt{LoadBalancerService} nel capitolo sul Business Layer.
+
+\section{Livello 2: Persistence Layer (DAO)}
+
+I test dei DAO non usano mock: interrogano un database H2 reale, inizializzato ad ogni classe di test con lo stesso \texttt{scheme.sql} usato in produzione.
+
+\begin{lstlisting}[language=Java, caption=Avvio di H2 con lo schema reale di produzione.]
+@BeforeAll
+static void startDatabase() throws SQLException {
+    String url = "jdbc:h2:mem:chargenet_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;"
+               + "DEFAULT_NULL_ORDERING=HIGH;INIT=RUNSCRIPT FROM './src/main/resources/scheme.sql'";
+    connection = DriverManager.getConnection(url, "sa", "");
+}
+\end{lstlisting}
+
+Poiché la connessione è condivisa da tutta la classe (\texttt{@BeforeAll}, non \texttt{@BeforeEach}, per non pagare il costo di riavviare H2 ad ogni singolo test), ogni test deve invece garantire di ripartire da una tabella vuota. Questo pone un problema: la tabella \texttt{charging\_sessions} ha una foreign key verso \texttt{charging\_stations}, quindi uno svuotamento diretto verrebbe rifiutato dal database finché non si disattivano temporaneamente i vincoli:
+
+\begin{lstlisting}[language=Java, caption=Pulizia delle tabelle rispettando temporaneamente i vincoli di integrità.]
+try (Statement stmt = connection.createStatement()) {
+    stmt.execute("SET REFERENTIAL_INTEGRITY FALSE");
+
+    stmt.execute("TRUNCATE TABLE charging_sessions RESTART IDENTITY");
+    stmt.execute("TRUNCATE TABLE charging_stations RESTART IDENTITY");
+    stmt.execute("TRUNCATE TABLE users RESTART IDENTITY");
+    stmt.execute("TRUNCATE TABLE power_transformers RESTART IDENTITY");
+
+    // ... reinserimento dei dati minimi necessari (operatore, driver, trasformatore, stazione) ...
+
+    stmt.execute("SET REFERENTIAL_INTEGRITY TRUE");
+}
+\end{lstlisting}
+
+Il vantaggio di questo approccio rispetto a un semplice \texttt{DELETE FROM}: \texttt{RESTART IDENTITY} azzera anche i contatori auto-incrementali, così ogni test parte con ID prevedibili
