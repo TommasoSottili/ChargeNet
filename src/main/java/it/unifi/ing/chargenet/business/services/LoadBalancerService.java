@@ -20,13 +20,10 @@ import java.util.List;
 public class LoadBalancerService implements Observer {
 
     private final SessionService sessionService;
-    private final DatabaseManager dbManager;
     private final DaoFactory daoFactory;
 
-    // Sostituiamo StationDao con l'infrastruttura transazionale
-    public LoadBalancerService(SessionService sessionService, DatabaseManager dbManager, DaoFactory daoFactory) {
+    public LoadBalancerService(SessionService sessionService, DaoFactory daoFactory) {
         this.sessionService = sessionService;
-        this.dbManager = dbManager;
         this.daoFactory = daoFactory;
     }
 
@@ -35,7 +32,6 @@ public class LoadBalancerService implements Observer {
         if (!(source instanceof PowerTransformer)) {
             return;
         }
-
         PowerTransformer transformer = (PowerTransformer) source;
 
         switch (event) {
@@ -52,10 +48,10 @@ public class LoadBalancerService implements Observer {
         System.out.println("🚨 [LOAD BALANCER] THERMAL ALERT: Trasformatore " + transformer.getName());
         List<ChargingStation> stations = GridCluster.getInstance().getStationsForTransformer(transformer.getId());
 
-        // FASE 1: Aggiornamento atomico di tutte le colonnine
+        // FASE 1: tutte le colonnine del ramo → OVERLOADED, in un'unica transazione
         Connection connection = null;
         try {
-            connection = dbManager.getConnection();
+            connection = DatabaseManager.getConnection();
             connection.setAutoCommit(false);
             StationDao stationDao = daoFactory.createStationDao(connection);
 
@@ -68,19 +64,16 @@ public class LoadBalancerService implements Observer {
             rollbackQuietly(connection);
             System.err.println("Errore nell'aggiornamento delle colonnine durante l'alert termico!");
         } finally {
-            closeQuietly(connection); // Chiudiamo la connessione PRIMA di chiamare il SessionService
+            closeQuietly(connection);   // chiudi PRIMA di chiamare il SessionService
         }
 
-        // FASE 2: Chiusura delle sessioni
-        // Il sessionService gestirà le sue connessioni in totale autonomia per ogni forceClose!
+        // FASE 2: interruzione delle sessioni attive appartenenti al ramo.
+        // Il SessionService gestisce le sue connessioni in autonomia per ogni forceClose.
         List<ChargingSession> activeSessions = sessionService.getActiveSessions();
         for (ChargingSession session : activeSessions) {
             ChargingStation sessionStation = session.getStation();
-
-            // Usiamo l'ID per confrontarle, in modo da evitare problemi di instanze diverse in memoria
             boolean belongsToTransformer = stations.stream()
                     .anyMatch(s -> s.getId().equals(sessionStation.getId()));
-
             if (belongsToTransformer) {
                 sessionService.forceClose(session);
             }
@@ -93,7 +86,7 @@ public class LoadBalancerService implements Observer {
 
         Connection connection = null;
         try {
-            connection = dbManager.getConnection();
+            connection = DatabaseManager.getConnection();
             connection.setAutoCommit(false);
             StationDao stationDao = daoFactory.createStationDao(connection);
 
@@ -112,7 +105,6 @@ public class LoadBalancerService implements Observer {
         }
     }
 
-    // --- Metodi Utility ---
     private void rollbackQuietly(Connection connection) {
         if (connection != null) {
             try { connection.rollback(); } catch (SQLException ex) { /* log */ }

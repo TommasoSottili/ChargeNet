@@ -14,8 +14,8 @@ public class PowerTransformer implements Subject {
     private double temperature;
     private double loadPercent;
     // Definiamo il "100%" del nostro trasformatore
-    // Se riceve 10.0 di calore in un colpo solo, sta lavorando al 100% delle sue capacità.
-    private static final double MAX_HEAT_PER_TICK = 10.0;
+    // Se riceve 20.0 di calore in un colpo solo, sta lavorando al 100% delle sue capacità.
+    private static final double MAX_HEAT_PER_TICK = 30.0;
     private final List<Observer> observers;
 
     protected PowerTransformer() {
@@ -60,7 +60,7 @@ public class PowerTransformer implements Subject {
 
         } else {
             // Nessuna sessione attiva: il trasformatore si raffredda di 2 gradi a tick
-            this.temperature = Math.max(25.0, this.temperature - 2.0);
+            this.temperature = Math.max(25.0, this.temperature - 5.0);
             this.loadPercent = 0.0;
         }
 

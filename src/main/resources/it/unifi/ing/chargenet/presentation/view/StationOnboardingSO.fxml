@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.text.Font?>
+
+<BorderPane fx:controller="it.unifi.ing.chargenet.presentation.controller.NewStationController" maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="700.0" prefWidth="400.0" style="-fx-background-color: #F8F9FA;" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1">
+
+    <top>
+        <VBox style="-fx-background-color: white; -fx-border-color: #E0E0E0; -fx-border-width: 0 0 1 0;" BorderPane.alignment="CENTER">
+            <padding><Insets bottom="15.0" left="20.0" right="20.0" top="20.0" /></padding>
+            <children>
+                <HBox alignment="CENTER_LEFT">
+                    <children>
+                        <Label onMouseClicked="#goBack" style="-fx-cursor: hand; -fx-text-fill: #7b6d6d;" text="&lt; Back">
+                            <font><Font name="System Bold" size="14.0" /></font>
+                        </Label>
+                        <Region HBox.hgrow="ALWAYS" />
+                        <Label style="-fx-text-fill: #131212;" text="New Station">
+                            <font><Font name="System Bold" size="18.0" /></font>
+                        </Label>
+                        <Region HBox.hgrow="ALWAYS" />
+                        <Label onMouseClicked="#clearFields" style="-fx-cursor: hand; -fx-text-fill: #7b6d6d;" text="Clear">
+                            <font><Font name="System Bold" size="14.0" /></font>
+                        </Label>
+                    </children>
+                </HBox>
+            </children>
+        </VBox>
+    </top>
+
+    <center>
+        <ScrollPane fitToWidth="true" style="-fx-background-color: transparent; -fx-background: transparent; -fx-border-color: transparent;" BorderPane.alignment="CENTER">
+            <content>
+                <VBox spacing="20.0">
+                    <padding><Insets bottom="20.0" left="20.0" right="20.0" top="20.0" /></padding>
+                    <children>
+                        <HBox alignment="CENTER_LEFT">
+                            <children>
+                                <Label style="-fx-text-fill: #131212;" text="Setup Details">
+                                    <font><Font name="System Bold" size="16.0" /></font>
+                                </Label>
+                                <Region HBox.hgrow="ALWAYS" />
+                            </children>
+                        </HBox>
+
+                        <VBox spacing="15.0" style="-fx-background-color: white; -fx-background-radius: 10; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.05), 5, 0, 0, 2);">
+                            <padding><Insets bottom="20.0" left="15.0" right="15.0" top="20.0" /></padding>
+                            <children>
+                                <Label style="-fx-text-fill: #f59100;" text="1. Location &amp; Identity">
+                                    <font><Font name="System Bold" size="14.0" /></font>
+                                </Label>
+                                <VBox spacing="5.0">
+                                    <children>
+                                        <Label style="-fx-text-fill: #7b6d6d;" text="Station Name"><font><Font name="System Bold" size="12.0" /></font></Label>
+                                        <TextField fx:id="nameField" prefHeight="40.0" promptText="e.g. Firenze SMN Fast" style="-fx-background-color: #F8F9FA; -fx-border-color: #E0E0E0; -fx-border-radius: 8; -fx-background-radius: 8; -fx-padding: 0 10 0 10;">
+                                            <font><Font size="14.0" /></font>
+                                        </TextField>
+                                    </children>
+                                </VBox>
+                                <VBox spacing="5.0">
+                                    <children>
+                                        <Label style="-fx-text-fill: #7b6d6d;" text="Full Address"><font><Font name="System Bold" size="12.0" /></font></Label>
+                                        <TextField fx:id="addressField" prefHeight="40.0" promptText="e.g. Piazza della Stazione, Firenze" style="-fx-background-color: #F8F9FA; -fx-border-color: #E0E0E0; -fx-border-radius: 8; -fx-background-radius: 8; -fx-padding: 0 10 0 10;">
+                                            <font><Font size="14.0" /></font>
+                                        </TextField>
+                                    </children>
+                                    <children>
+                                        <Label style="-fx-text-fill: #7b6d6d;" text="District"><font><Font name="System Bold" size="12.0" /></font></Label>
+                                        <ComboBox fx:id="zoneCombo" maxWidth="Infinity" prefHeight="40.0" promptText="Seleziona quartiere" style="-fx-background-color: #F8F9FA; -fx-border-color: #E0E0E0; -fx-border-radius: 8; -fx-background-radius: 8;" />
+                                    </children>
+                                </VBox>
+                            </children>
+                        </VBox>
+
+                        <VBox spacing="15.0" style="-fx-background-color: white; -fx-background-radius: 10; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.05), 5, 0, 0, 2);">
+                            <padding><Insets bottom="20.0" left="15.0" right="15.0" top="20.0" /></padding>
+                            <children>
+                                <Label style="-fx-text-fill: #f59100;" text="2. Technical Specifications">
+                                    <font><Font name="System Bold" size="14.0" /></font>
+                                </Label>
+                                <VBox spacing="5.0">
+                                    <children>
+                                        <Label style="-fx-text-fill: #7b6d6d;" text="Max Power (kW)"><font><Font name="System Bold" size="12.0" /></font></Label>
+                                        <TextField fx:id="powerField" prefHeight="40.0" promptText="150" style="-fx-background-color: #F8F9FA; -fx-border-color: #E0E0E0; -fx-border-radius: 8; -fx-background-radius: 8; -fx-padding: 0 10 0 10;">
+                                            <font><Font size="14.0" /></font>
+                                        </TextField>
+                                    </children>
+                                </VBox>
+                                <VBox spacing="5.0">
+                                    <children>
+                                        <Label style="-fx-text-fill: #7b6d6d;" text="Tariff (€/kWh)"><font><Font name="System Bold" size="12.0" /></font></Label>
+                                        <TextField fx:id="tariffField" prefHeight="40.0" promptText="0.30" style="-fx-background-color: #F8F9FA; -fx-border-color: #E0E0E0; -fx-border-radius: 8; -fx-background-radius: 8; -fx-padding: 0 10 0 10;">
+                                            <font><Font size="14.0" /></font>
+                                        </TextField>
+                                    </children>
+                                </VBox>
+                                <VBox spacing="5.0">
+                                    <children>
+                                        <Label style="-fx-text-fill: #7b6d6d;" text="Connector Type"><font><Font name="System Bold" size="12.0" /></font></Label>
+                                        <ComboBox fx:id="connectorCombo" maxWidth="Infinity" prefHeight="40.0" promptText="Seleziona connettore" style="-fx-background-color: #F8F9FA; -fx-border-color: #E0E0E0; -fx-border-radius: 8; -fx-background-radius: 8;" />
+                                    </children>
+                                </VBox>
+                            </children>
+                        </VBox>
+                    </children>
+                </VBox>
+            </content>
+        </ScrollPane>
+    </center>
+
+    <bottom>
+        <VBox style="-fx-background-color: white; -fx-border-color: #E0E0E0; -fx-border-width: 1 0 0 0;" BorderPane.alignment="CENTER">
+            <padding><Insets bottom="20.0" left="20.0" right="20.0" top="15.0" /></padding>
+            <children>
+                <Button fx:id="deployBtn" onMouseClicked="#handleDeploy" maxWidth="Infinity" mnemonicParsing="false" prefHeight="50.0" style="-fx-background-color: #131212; -fx-background-radius: 10; -fx-cursor: hand; -fx-text-fill: white;" text="Deploy Station">
+                    <font><Font name="System Bold" size="18.0" /></font>
+                </Button>
+            </children>
+        </VBox>
+    </bottom>
+</BorderPane>

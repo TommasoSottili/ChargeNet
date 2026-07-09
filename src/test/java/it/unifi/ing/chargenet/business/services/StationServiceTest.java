@@ -6,6 +6,7 @@ import it.unifi.ing.chargenet.dao.interfaces.StationDao;
 import it.unifi.ing.chargenet.dao.postgres.DatabaseManager;
 import it.unifi.ing.chargenet.domain.infrastructure.ChargingStation;
 import it.unifi.ing.chargenet.domain.infrastructure.PowerTransformer;
+import it.unifi.ing.chargenet.domain.infrastructure.StationStatus;
 import it.unifi.ing.chargenet.domain.users.ConnectorType;
 import it.unifi.ing.chargenet.domain.users.StationOperator;
 import it.unifi.ing.chargenet.domain.users.Driver;
@@ -213,11 +214,13 @@ class StationServiceTest {
         when(mockDriver.getLatitude()).thenReturn(45.0);
         when(mockDriver.getLongitude()).thenReturn(9.0);
         when(mockDriver.getConnectorType()).thenReturn(ConnectorType.CCS_2);
+        when(mockDriver.getId()).thenReturn(1L);   // il service lo passa come reservedByDriverId
 
-        // Creiamo una finta lista di risultati
-        java.util.List<ChargingStation> mockList = java.util.Collections.singletonList(mock(ChargingStation.class));
+        java.util.List<ChargingStation> mockList =
+                java.util.Collections.singletonList(mock(ChargingStation.class));
 
-        when(stationDaoMock.findNearestAvailable(45.0, 9.0, ConnectorType.CCS_2, null))
+        // Firma nuova: (lat, lng, type, excludeId=null, reservedByDriverId=1L)
+        when(stationDaoMock.findNearestAvailable(45.0, 9.0, ConnectorType.CCS_2, null, 1L))
                 .thenReturn(mockList);
 
         // --- ACT ---
@@ -226,8 +229,6 @@ class StationServiceTest {
         // --- ASSERT ---
         assertNotNull(result);
         assertEquals(1, result.size());
-
-        // Verifichiamo che la connessione sia stata chiusa anche in sola lettura
         verify(connectionMock, times(1)).close();
     }
 
@@ -340,5 +341,33 @@ class StationServiceTest {
         // ASSERT
         assertEquals(expected, result);
         verify(stationDaoMock).findByStatus(it.unifi.ing.chargenet.domain.infrastructure.StationStatus.OVERLOADED);
+    }
+
+    @Test
+    @DisplayName("Recupero delle colonnine in attesa di verifica")
+    void testGetPendingStations_Success() throws Exception {
+        ChargingStation pending1 = mock(ChargingStation.class);
+        ChargingStation pending2 = mock(ChargingStation.class);
+        List<ChargingStation> mockList = List.of(pending1, pending2);
+
+        // Il service deve chiedere al DAO ESATTAMENTE lo stato PENDING_VERIFICATION
+        doReturn(mockList).when(stationDaoMock).findByStatus(StationStatus.PENDING_VERIFICATION);
+
+        List<ChargingStation> result = stationService.getPendingStations();
+
+        assertEquals(2, result.size());
+        verify(stationDaoMock, times(1)).findByStatus(StationStatus.PENDING_VERIFICATION);
+        verify(connectionMock, times(1)).close();
+    }
+
+    @Test
+    @DisplayName("Nessuna colonnina in attesa: lista vuota")
+    void testGetPendingStations_Empty() throws Exception {
+        doReturn(java.util.Collections.emptyList()).when(stationDaoMock).findByStatus(StationStatus.PENDING_VERIFICATION);
+
+        List<ChargingStation> result = stationService.getPendingStations();
+
+        assertTrue(result.isEmpty());
+        verify(connectionMock, times(1)).close();
     }
 }

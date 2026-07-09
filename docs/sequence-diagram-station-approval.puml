@@ -1,0 +1,58 @@
+@startuml Station_Approval
+title Approvazione colonnina — l'Energy Manager fissa la tariffa piattaforma
+
+actor "Energy Manager" as MGR
+participant "StationApprovalQueue\nController" as C
+participant "StationService" as STS
+participant "ValidationService" as VS
+participant "ChargingStation\n«Entity»" as STA
+participant "StationDao" as SD
+database "DB" as DB
+
+== Caricamento della coda ==
+MGR -> C : apre "Approval Queue"
+C -> STS : getPendingStations()
+STS -> DB : SELECT ... status = 'PENDING_VERIFICATION'
+STS --> C : List<ChargingStation>
+C -> C : una card per colonnina\n(badge conteggio = pending.size())
+
+== Decisione del Manager ==
+alt APPROVA
+    MGR -> C : click "Approve" su una card
+    C -> C : askPlatformTariff()   ' dialog: € / kWh
+    opt tariffa valida (non annullata, ≥ 0)
+        C -> VS : approve(station, platformTariff)
+        VS -> DB : getConnection(); setAutoCommit(false)
+        VS -> DB : createStationDao(conn)
+        VS -> STA : activate(platformTariff)
+        note right of STA
+            Dominio: valida la transizione.
+            Solo PENDING_VERIFICATION → ACTIVE.
+            Fissa tariffPlatform (quota piattaforma).
+            Se non è in attesa → IllegalStateException.
+        end note
+        alt commit
+            VS -> SD : update(station)
+            VS -> DB : commit()
+            VS --> C : ok
+            C -> C : loadQueue()   ' la colonnina sparisce dalla coda
+        else rollback
+            VS -> DB : rollback()
+            VS --> C : eccezione
+            C -> MGR : alert d'errore
+        end
+        VS -> DB : close()
+    end
+else RIFIUTA
+    MGR -> C : click "Reject" su una card
+    C -> C : chiede motivazione (dialog)
+    C -> VS : reject(station, motivation)
+    VS -> STA : reject()
+    note right of STA
+        Dominio: PENDING_VERIFICATION → REJECTED.
+    end note
+    VS -> SD : update(station)   ' in transazione
+    VS --> C : ok
+    C -> C : loadQueue()
+end
+@enduml

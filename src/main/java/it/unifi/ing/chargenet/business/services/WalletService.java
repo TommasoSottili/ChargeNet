@@ -11,6 +11,7 @@ import it.unifi.ing.chargenet.domain.financials.TransactionType;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 public class WalletService {
 
@@ -77,49 +78,53 @@ public class WalletService {
 
         Connection connection = null;
         try {
-            // 1. Apriamo la connessione ed entriamo in modalità "Transazione"
             connection = DatabaseManager.getConnection();
             connection.setAutoCommit(false);
 
-            // 2. Creiamo i DAO
             UserDao userDao = daoFactory.createUserDao(connection);
             TransactionDao transactionDao = daoFactory.createTransactionDao(connection);
 
-            // Otteniamo il costo del piano.
-            // NOTA: Se getMonthlyFee() restituisce ancora un double, cambialo in BigDecimal nella classe SubscriptionPlan!
-            BigDecimal fee = plan.getMonthlyFee();
-
-            // Controllo preventivo dei fondi (fondamentale per non mandare il driver "in rosso")
-            if (driver.getWalletBalance().compareTo(fee) < 0) {
-                throw new IllegalStateException("Fondi insufficienti nel portafoglio per attivare il piano: " + plan.name());
+            if (driver.getWalletBalance() == null) {
+                throw new IllegalStateException("Saldo del portafoglio non disponibile.");
             }
 
-            // 3. LOGICA DI DOMINIO: Aggiorniamo lo stato del Driver
-            // Come da documentazione, usiamo il metodo interno della tua classe Driver
-            driver.updatePlan(plan);
+            // Differenza di canone: si paga SOLO lo scarto (proration)
+            SubscriptionPlan current = driver.getSubscriptionPlan();
+            BigDecimal currentFee = (current != null) ? current.getMonthlyFee() : BigDecimal.ZERO;
+            BigDecimal delta = plan.getMonthlyFee().subtract(currentFee).setScale(2, RoundingMode.HALF_UP);
 
-            // 4. CREAZIONE DELLA RICEVUTA: L'importo è negativo (fee.negate()) perché è un'uscita dal portafoglio
+            // Regola di business: nessun downgrade "subito"
+            if (delta.compareTo(BigDecimal.ZERO) < 0) {
+                throw new IllegalArgumentException(
+                        "Non è possibile passare a un piano inferiore durante il periodo attivo.");
+            }
+            // Controllo fondi sulla SOLA differenza
+            if (delta.compareTo(BigDecimal.ZERO) > 0
+                    && driver.getWalletBalance().compareTo(delta) < 0) {
+                throw new IllegalStateException(
+                        "Fondi insufficienti: servono € " + delta + " per l'upgrade a " + plan.name() + ".");
+            }
+
+            // DOMINIO: addebita il delta e imposta il piano; ritorna l'importo pagato
+            BigDecimal charged = driver.updatePlan(plan);
+
+            // RICEVUTA: differenza pagata (uscita → importo negativo)
             Transaction transaction = Transaction.create(
                     driver,
                     TransactionType.SUBSCRIPTION,
-                    fee.negate(),
+                    charged.negate(),
                     0.0,
-                    "Attivazione piano mensile: " + plan.name()
+                    "Cambio piano a " + plan.name() + " (differenza € " + charged + ")"
             );
 
-            // 5. PERSISTENZA: Diciamo ai DAO di preparare le query
             userDao.update(driver);
             transactionDao.save(transaction);
 
-            // 6. COMMIT: Salvataggio definitivo
             connection.commit();
-            System.out.println("[WalletService] Cambio piano a " + plan.name() + " completato con successo per: " + driver.getEmail());
-
             return transaction;
 
         } catch (Exception e) {
             rollbackQuietly(connection);
-            // Rilanciamo le eccezioni note per farle gestire alla UI di JavaFX
             if (e instanceof IllegalStateException) throw (IllegalStateException) e;
             if (e instanceof IllegalArgumentException) throw (IllegalArgumentException) e;
             throw new RuntimeException("Errore critico durante il cambio del piano di abbonamento", e);
@@ -127,12 +132,7 @@ public class WalletService {
             closeQuietly(connection);
         }
     }
-
-    // Aggiunto per permettere al SessionService di finalizzare il pagamento
-    public Transaction processSessionPayment(Driver driver, double amount, String description) {
-        return null;
-    }
-
+    
     private void rollbackQuietly(Connection connection) {
         if (connection != null) {
             try { connection.rollback(); } catch (SQLException ex) { /* Log silenzioso */ }

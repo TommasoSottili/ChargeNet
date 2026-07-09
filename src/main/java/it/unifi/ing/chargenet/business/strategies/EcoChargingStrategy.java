@@ -2,28 +2,20 @@ package it.unifi.ing.chargenet.business.strategies;
 
 import it.unifi.ing.chargenet.domain.infrastructure.ChargingStation;
 import it.unifi.ing.chargenet.domain.users.Driver;
-import it.unifi.ing.chargenet.domain.users.SubscriptionPlan;
 import it.unifi.ing.chargenet.domain.sessions.ChargingType;
+import java.math.BigDecimal;
 
 public class EcoChargingStrategy implements ChargingStrategy {
 
-    private static final double BASE_RATE_PER_KWH = 0.40;
-    private static final double HEAT_PER_TICK = 1.0;
+    private static final double HEAT_PER_TICK = 4.0;
 
     @Override
     public double calculateCost(double kwh, ChargingStation station, Driver driver) {
-        double baseCost = kwh * BASE_RATE_PER_KWH;
-
-        // Se non c'è il driver o non ha un piano, paga il prezzo base
-        if (driver == null || driver.getSubscriptionPlan() == null) {
-            return Math.round(baseCost * 100.0) / 100.0;
-        }
-
-        // Prende lo sconto (es. 0.10 per Premium, 0.05 per Plus, 0.0 per Basic)
-        double discount = driver.getSubscriptionPlan().getDiscount();
-        double finalCost = baseCost * (1 - discount);
-
-        return Math.round(finalCost * 100.0) / 100.0;
+        // Prezzo base dal dominio (tariffa + sconto piano sulla quota piattaforma),
+        // poi Eco applica il suo 10% extra di sconto.
+        BigDecimal base = station.priceFor(kwh, driver);
+        BigDecimal ecoDiscounted = base.multiply(BigDecimal.valueOf(0.90));
+        return ecoDiscounted.setScale(2, java.math.RoundingMode.HALF_UP).doubleValue();
     }
 
     @Override

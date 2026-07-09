@@ -101,18 +101,6 @@ public class ValidationService {
         }
     }
 
-    public List<ChargingStation> getPendingStations() {
-        try (Connection connection = DatabaseManager.getConnection()) {
-            StationDao stationDao = daoFactory.createStationDao(connection);
-
-            // Richiamiamo il DAO filtrando per lo stato corretto
-            return stationDao.findByStatus(it.unifi.ing.chargenet.domain.infrastructure.StationStatus.PENDING_VERIFICATION);
-
-        } catch (SQLException e) {
-            throw new RuntimeException("Errore durante il recupero delle colonnine in attesa di validazione", e);
-        }
-    }
-
     protected boolean simulateConnectivityTest(double lat, double lng) {
         // Simulazione: Diciamo che il ping fallisce casualmente 1 volta su 10 (10% di failure rate)
         // per simulare problemi di rete reali durante i test dell'Energy Manager.

@@ -113,6 +113,22 @@ public class ChargingStation {
         return s;
     }
 
+    /**
+     * Prezzo di una ricarica per questo Driver, secondo la tariffa a doppio livello.
+     * Lo sconto del piano si applica SOLO alla quota piattaforma (regola di dominio).
+     */
+    public BigDecimal priceFor(double kwh, Driver driver) {
+        BigDecimal discount = (driver != null && driver.getSubscriptionPlan() != null)
+                ? BigDecimal.valueOf(driver.getSubscriptionPlan().getDiscount())
+                : BigDecimal.ZERO;
+
+        BigDecimal platformAfterDiscount = tariffPlatform.multiply(BigDecimal.ONE.subtract(discount));
+        BigDecimal ratePerKwh = tariffOperator.add(platformAfterDiscount);
+
+        return ratePerKwh.multiply(BigDecimal.valueOf(kwh))
+                .setScale(2, java.math.RoundingMode.HALF_UP);
+    }
+
     public boolean isAvailableFor(ConnectorType type) {
         return this.status == StationStatus.ACTIVE && this.connectorType == type;
     }
@@ -120,11 +136,18 @@ public class ChargingStation {
     public boolean isReservedBy(Driver driver) {
         return this.status == StationStatus.RESERVED &&
                 this.reservedBy != null &&
-                this.reservedBy.equals(driver);
+                driver != null &&
+                this.reservedBy.getId().equals(driver.getId());
     }
 
-    public BigDecimal getTotalTariff() {
-        return this.tariffOperator.add(this.tariffPlatform);
+    /**
+     * Rimuove la prenotazione dalla colonnina: azzera il riferimento al Driver
+     * e la scadenza. Da chiamare quando la colonnina torna disponibile, così
+     * il campo reserved_by_id non resta popolato con un dato ormai obsoleto.
+     */
+    public void clearReservation() {
+        this.reservedBy = null;
+        this.expirationTimeStamp = null;
     }
 
     public void activate(BigDecimal platformTariff) {
