@@ -23,13 +23,14 @@ Di seguito sono elencati i cinque pacchetti principali, con una breve descrizion
 
 Nei prossimi paragrafi vedremo più nel dettaglio alcune delle soluzioni implementative che abbiamo adottato in questi cinque moduli.
 \subsection{Utenti}
+\label{subsec:utenti}
 Questo modulo definisce le identità degli attori tramite un'architettura basata sull'ereditarietà. Dalla classe astratta \texttt{User} derivano i tre profili specifici (\texttt{Driver}, \texttt{StationOperator} ed \texttt{EnergyManager}), ognuno con i propri attributi.
 
 Per rispettare il principio dell'incapsulamento, la logica di business è integrata direttamente nelle entità. Un esempio pratico è la gestione economica del \texttt{Driver}: quando c'è da scalare del credito, è l'oggetto stesso a fare i controlli sul proprio saldo.
 
 \vspace{0,3cm}
 \noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java]
+\begin{lstlisting}[language=Java, caption={Controllo del saldo nel metodo charge()}]
 public void charge(BigDecimal amount) {
     if (!hasSufficientBalance(amount)) {
         throw new InsufficientBalanceException("Saldo insufficiente");
@@ -40,17 +41,26 @@ public void charge(BigDecimal amount) {
 \end{minipage}
 \vspace{0.3cm}
 
-Questo approccio ci ha permesso di riutilizzare la validazione di base per operazioni più complesse. Ad esempio, il metodo per cambiare il piano in abbonamento richiama semplicemente il pagamento interno, mantenendo il codice pulito ed evitando duplicazioni:
+Questo approccio torna utile anche per operazioni più delicate. Il cambio di piano, ad esempio, non addebita il canone intero del nuovo piano, ma solo la differenza rispetto a quello attuale, e blocca i downgrade riusando comunque charge() per il controllo del saldo:
 
 \vspace{0,3cm}
 \noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java]
-public void updatePlan(SubscriptionPlan newPlan) {
-    BigDecimal fee = newPlan.getMonthlyFee();
-    if (fee.compareTo(BigDecimal.ZERO) > 0) {
-        charge(fee); 
+\begin{lstlisting}[language=Java, caption={Aggiornamento del piano tariffario}]
+public BigDecimal updatePlan(SubscriptionPlan newPlan) {
+    BigDecimal currentFee = (this.subscriptionPlan != null)
+            ? this.subscriptionPlan.getMonthlyFee() : BigDecimal.ZERO;
+    BigDecimal delta = newPlan.getMonthlyFee().subtract(currentFee)
+            .setScale(2, RoundingMode.HALF_UP);
+
+    if (delta.compareTo(BigDecimal.ZERO) < 0) {
+        throw new IllegalArgumentException(
+                "Non e possibile passare a un piano inferiore durante il periodo attivo.");
+    }
+    if (delta.compareTo(BigDecimal.ZERO) > 0) {
+        charge(delta);
     }
     this.subscriptionPlan = newPlan;
+    return delta;
 }
 \end{lstlisting}
 \end{minipage}
@@ -61,44 +71,60 @@ Per il collegamento con il database, invece di passare per i costruttori standar
 \subsection{Infrastrutture}
 L'obiettivo di questo pacchetto è tradurre in codice i limiti fisici del mondo reale. Per la classe \texttt{ChargingStation} era fondamentale impedire la creazione di oggetti con parametri incoerenti o pericolosi.
 
-Abbiamo quindi nascosto i costruttori, obbligando il resto del sistema a passare per il Factory Method \texttt{register()}. In questa fase la stazione fa un vero e proprio controllo di sicurezza: blocca sul nascere eventuali richieste assurde, come ad esempio tentare di associare una potenza di 350 kW a un connettore che fisicamente ne regge al massimo 22.
+Abbiamo quindi nascosto i costruttori, obbligando il resto del sistema a passare per il Factory Method \texttt{register()}. In questa fase la stazione esegue quattro controlli in sequenza: coordinate geografiche valide, potenza compresa tra 7 e 350 kW, potenza compatibile col limite fisico del connettore, e tariffa dell'operatore positiva. Basta che uno fallisca per bloccare subito la creazione.
 
 \vspace{0.3cm}
 \noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java]
-public static ChargingStation register(StationOperator operator, PowerTransformer transformer, Double lat, Double lng, ConnectorType connectorType, Double powerKw, BigDecimal tariff) {
-    if (powerKw > connectorType.getMaxPowerKw()) {
-        throw new InvalidStationParametersException(
-            "Errore di sicurezza: La potenza richiesta supera il limite fisico del connettore.");
+\begin{lstlisting}[language=Java, caption={Factory Method per la registrazione della stazione}]
+public static ChargingStation register(StationOperator operator, PowerTransformer transformer,
+                                        String name, String address, Double lat, Double lng,
+                                        ConnectorType connectorType, Double powerKw,
+                                        Boolean isSolar, BigDecimal tariff) {
+    if (lat < -90.0 || lat > 90.0) {
+        throw new InvalidStationParametersException("Latitudine non valida");
     }
-    return new ChargingStation(operator, transformer, lat, lng, connectorType, powerKw, tariff);
+    if (lng < -180.0 || lng > 180.0) {
+        throw new InvalidStationParametersException("Longitudine non valida");
+    }
+    if (powerKw < 7.0 || powerKw > 350.0) {
+        throw new InvalidStationParametersException("Potenza non valida. Deve essere compresa tra 7 kW e 350 kW.");
+    }
+    if (powerKw > connectorType.getMaxPowerKw()) {
+        throw new InvalidStationParametersException("Errore di sicurezza: La potenza richiesta (" + powerKw +
+                " kW) supera il limite fisico supportato dal connettore " + connectorType.name() +
+                " (" + connectorType.getMaxPowerKw() + " kW).");
+    }
+    if (tariff.compareTo(BigDecimal.ZERO) <= 0) {
+        throw new InvalidStationParametersException("La tariffa dell'operatore deve essere strettamente positiva.");
+    }
+    return new ChargingStation(operator, transformer, name, address, lat, lng, connectorType, powerKw, isSolar, tariff);
 }
 \end{lstlisting}
 \end{minipage}
 \vspace{0.3cm}
 
-L'altro parte fodnamentale del pacchetto è il \texttt{PowerTransformer}, che fa da base per il sistema di Load Balancing. Piuttosto che avere un servizio esterno che controlla continuamente i trasformatori, abbiamo reso il trasformatore intelligente applicando il pattern Observer. A ogni ciclo di simulazione, ricalcola la sua temperatura interna; se supera la soglia critica dei 90 gradi, genera autonomamente un \texttt{THERMAL\_ALERT} per avvisare la rete, senza bisogno di sapere chi o come gestirà effettivamente l'emergenza.
+L'altro parte fodnamentale del pacchetto è il \texttt{PowerTransformer}, che fa da base per il sistema di Load Balancing. Piuttosto che avere un servizio esterno che controlla continuamente i trasformatori, abbiamo reso il trasformatore intelligente applicando il pattern Observer. A ogni ciclo di simulazione, ricalcola la sua temperatura interna; se supera la soglia critica dei 90 gradi, genera autonomamente un \texttt{THERMAL\_ALERT} per avvisare la rete, senza bisogno di sapere chi o come gestirà effettivamente l'emergenza(vedasi paragrafo~\ref{sec: Observer Pattern}).
 
 \subsection{Sessioni}
 Il pacchetto racchiude la logica legata all'erogazione dell'energia. La classe centrale, \texttt{ChargingSession}, non si limita a registrare passivamente i dati (come kWh erogati e costi parziali), ma regola attivamente l'intero ciclo di vita dell'operazione, dalla creazione fino al completamento naturale o all'interruzione per emergenza termica.
 
-Per garantire che una ricarica non inizi in condizioni non valide, l'istanziazione è affidata al metodo factory \texttt{open()}. Questo metodo esegue una serie di controlli incrociati di dominio: verifica la compatibilità fisica del connettore, controlla che la stazione non sia occupata e calcola se il conducente possiede un saldo minimo sufficiente, tenendo conto anche dei moltiplicatori di sconto legati al suo piano di abbonamento:
+Per garantire che una ricarica non inizi in condizioni non valide, l'istanziazione è affidata al metodo factory \texttt{open()}. Questo metodo esegue una serie di controlli incrociati di dominio: verifica la compatibilità fisica del connettore, controlla che la stazione non sia occupata e delega a ChargingStation.priceFor() il calcolo del saldo minimo richiesto, lo stesso metodo che userà poi la strategia di ricarica scelta, così il controllo d'ingresso e l'addebito reale non possono mai calcolare cifre diverse:
 
+\vspace{0.3cm}
 \noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java]
-public static ChargingSession open(Driver driver, ChargingStation station, ChargingType strategy,Double batteryStart) {
-    boolean isAvailable = station.isAvailableFor(driver.getConnectorType()) || 
-                          station.isReservedBy(driver);
+\begin{lstlisting}[language=Java, caption={Apertura di una sessione di ricarica}]
+public static ChargingSession open(Driver driver, ChargingStation station, ChargingType strategy, Double batteryStart) {
+
+    boolean isAvailable = station.isAvailableFor(driver.getConnectorType()) || station.isReservedBy(driver);
     if (!isAvailable) {
-        throw new StationNotAvailableException("Colonnina non compatibile o occupata.");
+        throw new StationNotAvailableException("La colonnina " + station.getName() + " non e' disponibile o non e' compatibile col tuo veicolo.");
     }
 
-    BigDecimal pricePerKwh = station.getTotalTariff();
-    BigDecimal discountMult = BigDecimal.ONE.subtract(BigDecimal.valueOf(driver.getDiscount()));
-    BigDecimal minimumRequired = pricePerKwh.multiply(BigDecimal.valueOf(5)).multiply(discountMult);
+    BigDecimal minimumRequired = station.priceFor(5.0, driver);
 
     if (!driver.hasSufficientBalance(minimumRequired)) {
-        throw new InsufficientBalanceException("Credito insufficiente per avviare la sessione.");
+        throw new InsufficientBalanceException("Credito insufficiente per avviare la sessione. E' richiesto un saldo di almeno " +
+                minimumRequired + "\\texteuro.");
     }
 
     return new ChargingSession(driver, station, strategy, batteryStart);
@@ -118,7 +144,7 @@ Per blindare ulteriormente l'integrità del registro, la generazione di un nuovo
 
 \vspace{0.3cm}
 \noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java]
+\begin{lstlisting}[language=Java, caption={Creazione di una transazione contabile}]
 public static Transaction create(Driver driver, TransactionType type, BigDecimal amount,
                                  Double kwh, String description) {
 
@@ -143,7 +169,7 @@ Nella classe \texttt{Rating}, la creazione di un nuovo feedback è protetta da c
 
 \vspace{0.3cm}
 \noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java]
+\begin{lstlisting}[language=Java, caption={Creazione di un feedback utente}]
 public static Rating leave(Driver driver, ChargingStation station, ChargingSession session, Integer stars, String comment) {
     if (stars == null || stars < 1 || stars > 5) {
         throw new InvalidRatingException("Errore di validazione: il rating deve essere un valore compreso tra 1 e 5 stelle.");
@@ -154,11 +180,11 @@ public static Rating leave(Driver driver, ChargingStation station, ChargingSessi
 \end{minipage}
 \vspace{0.3cm}
 
-Il vero aspetto interessante di questo modulo, tuttavia, si trova nella classe \texttt{RatingAlert}. Quando la media di una stazione cala drasticamente, il sistema genera un avviso. Invece di affidare la chiusura di questo ticket a un servizio esterno, abbiamo inserito la logica di transizione di stato direttamente all'interno dell'entità. I metodi per sospendere la colonnina o ignorare l'allarme verificano prima che la segnalazione sia effettivamente ancora in sospeso, evitando che un operatore possa inavvertitamente alterare pratiche già chiuse:
+Una parte interessante di questo modulo si trova nella classe \texttt{RatingAlert}. Quando la media di una stazione cala drasticamente, il sistema genera un avviso. Invece di affidare la chiusura di questo ticket a un servizio esterno, abbiamo inserito la logica di transizione di stato direttamente all'interno dell'entità. I metodi per sospendere la colonnina o ignorare l'allarme verificano prima che la segnalazione sia effettivamente ancora in sospeso, evitando che un operatore possa inavvertitamente alterare pratiche già chiuse, La decisione di generare l'alert, invece, non spetta al dominio ma al RatingService (vedi paragrafo \ref{sec:GestioneFeedback}), che dopo ogni nuova recensione ricalcola la media e verifica la soglia.
 
 \vspace{0.3cm}
 \noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java]
+\begin{lstlisting}[language=Java, caption={Chiusura di un alert di manutenzione}]
 public void resolveSuspend(String note) {
     if (isPending()) {
         this.status = RatingAlertStatus.RESOLVED_SUSPENDED;
@@ -187,17 +213,22 @@ Per risolvere questo collo di bottiglia, abbiamo implementato \texttt{GridCluste
 
 private Map<Long, List<ChargingStation>> stationsByTransformer;
 
-public void init(TransformerDao tDao, StationDao sDao) {
-    this.transformers = tDao.findAll();
-    this.allStations = sDao.findAll();
+ public void init(TransformerDao tDao, StationDao sDao) {
+        this.transformers = tDao.findAll();
+        this.allStations = sDao.findAll();
 
-    for (PowerTransformer t : transformers) {
-        stationsByTransformer.put(t.getId(), new ArrayList<>());
+        for (PowerTransformer t : transformers) {
+            stationsByTransformer.put(t.getId(), new ArrayList<>());
+        }
+
+        for (ChargingStation station : allStations) {
+            Long tId = station.getTransformer().getId();
+            if (stationsByTransformer.containsKey(tId)) {
+                stationsByTransformer.get(tId).add(station);
+            }
+        }
     }
-    for (ChargingStation station : allStations) {
-        stationsByTransformer.get(station.getTransformer().getId()).add(station);
-    }
-}
+
 \end{lstlisting}
 \end{minipage}
 \vspace{0.3cm}
@@ -237,12 +268,12 @@ Quando riceve una notifica di \texttt{THERMAL\_ALERT}, il servizio reagisce isol
 
 \vspace{0.3cm}
 \noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java]
+\begin{lstlisting}[language=Java, caption={Gestione dell'alert termico}]
 private void handleThermalAlert(PowerTransformer transformer) {
     
     Connection connection = null;
     try {
-        connection = dbManager.getConnection();
+        connection = DatabaseManager.getConnection();;
         connection.setAutoCommit(false);
         StationDao stationDao = daoFactory.createStationDao(connection);
 
@@ -266,10 +297,40 @@ private void handleThermalAlert(PowerTransformer transformer) {
 \end{minipage}
 \vspace{0.3cm}
 
-\subsection{SessionService}
-Mentre il Load Balancer gestisce le emergenze, il \texttt{SessionService} coordina la normale operatività economica ed energetica. La sfida principale in questa classe è stata la corretta gestione del \textit{Commit} a due fasi. 
+È importante notare che questa seconda fase non è atomica nel suo complesso: ogni chiusura forzata (\texttt{forceClose}) apre e chiude una propria transazione indipendente, invece di essere racchiusa in un'unica transazione che copra tutte le sessioni del ramo. È una scelta deliberata, non un limite del sistema: se il fallimento di un singolo rimborso facesse fallire anche gli altri già conclusi con successo, si penalizzerebbero driver che non hanno responsabilità in quel fallimento.
 
-Ogni volta che una ricarica avanza (tramite il metodo \texttt{addTick()}) o viene interrotta, il sistema deve aggiornare contemporaneamente entità diverse: la sessione vera e propria, lo stato della colonnina e il portafoglio dell'utente. 
+Ogni chiusura forzata produce due effetti economici distinti, salvati nella stessa transazione, il rimborso al Driver e l'accredito
+allo Station Operator.
+
+\vspace{0.3cm}
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[language=Java, caption={Rimborso e accredito in forceClose()}]
+double kwhLastTick = station.getPowerKw() * (5.0 / 3600.0);
+BigDecimal refundAmount = BigDecimal.valueOf(
+    strategy.calculateCost(kwhLastTick, station, session.getDriver()));
+
+if (wasActive && station.getOperator() != null) {
+    double kwhDelivered = session.getKwhDelivered();
+    BigDecimal operatorShare = station.getTariffOperator()
+        .multiply(BigDecimal.valueOf(kwhDelivered))
+        .setScale(2, RoundingMode.HALF_UP);
+    operator.addEarnings(operatorShare);
+    userDao.update(operator);
+}
+\end{lstlisting}
+\end{minipage}
+\vspace{0.3cm}
+
+Il Driver viene rimborsato solo del costo dell'ultimo tick da 5 secondi, cioè
+l'energia pagata ma non ancora erogata al momento dello stacco. Lo Station
+Operator, allo stesso tempo, viene comunque accreditato della propria quota
+sull'intera energia realmente erogata fino a quel punto. L'interruzione non annulla quindi l'intera operazione: divide il conto tra le due parti in base a cosa è realmente accaduto prima dello stop.
+
+
+\subsection{SessionService}
+Mentre il Load Balancer gestisce le emergenze, il \texttt{SessionService} coordina la normale operatività economica ed energetica. La parte delicata in questa classe è stata garantire una corretta gestione unica di due scritture correlate (sessione e portafoglio) all'interno della stessa transazione
+
+Ogni volta che una ricarica avanza (tramite il metodo \texttt{addTick()}) o viene interrotta, il sistema deve aggiornare contemporaneamente la sessione e il portafoglio del Driver. La colonnina invece cambia stato solo all'apertura e alla chiusura, non ad ogni tick.
 
 Invece di delegare la gestione delle connessioni SQL ai singoli DAO, abbiamo centralizzato il controllo transazionale all'interno del Service. Modificando l'impostazione predefinita della connessione (\texttt{setAutoCommit(false)}), garantiamo l'atomicità dell'operazione. Se durante il salvataggio dei dati energetici si verifica un errore nel prelievo del denaro dal \textit{Wallet}, l'intera operazione viene annullata tramite \texttt{rollback}, assicurando che l'utente non venga mai disallineato rispetto alla colonnina fisica. 
 
@@ -292,7 +353,7 @@ La responsabilità di sicurezza dell'applicazione è divisa in due aree distinte
 
 \vspace{0.3cm}
 \noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java]
+\begin{lstlisting}[language=Java, caption={Test di validazione di una stazione}]
 public boolean testStation(ChargingStation station) {
     
     if (station.getPowerKw() > station.getConnectorType().getMaxPowerKw()) {
@@ -312,35 +373,24 @@ Solo se il metodo restituisce \texttt{true}, il servizio procede ad aprire la tr
 La gestione del profilo utente e del suo portafoglio è affidata al \texttt{DriverService} e al \texttt{WalletService}.
 Quest'ultimo, in particolare, implementa le funzionalità legate ai pagamenti e ai piani tariffari, sollevando la classe di dominio \texttt{Driver} dalla responsabilità di interfacciarsi con il database.
 
-Una delle operazioni più delicate di questo modulo è l'aggiornamento dell'abbonamento mensile. Per garantire che l'utente non generi debiti non autorizzati, l'attivazione di un piano a pagamento (es. PLUS o PREMIUM) richiede un controllo preventivo sul saldo corrente. Se i fondi sono sufficienti, il servizio orchestra due azioni distinte: delega l'aggiornamento del moltiplicatore di sconto all'oggetto \texttt{Driver} e genera simultaneamente una ricevuta per tenere traccia dello storno. 
+Una delle operazioni più delicate di questo modulo è il cambio di abbonamento, la cui logica di calcolo è già contenuta in Driver.updatePlan() (vedi paragrafo \ref{subsec:utenti}). Il WalletService, prima di delegare al dominio, effettua un'unica verifica aggiuntiva sul saldo:
 
-Anche in questo caso, per mantenere la coerenza del registro contabile, l'aggiornamento del profilo e il salvataggio della ricevuta avvengono all'interno di un unico blocco transazionale, garantendo che un eventuale errore nel salvataggio della \texttt{Transaction} annulli istantaneamente anche le modifiche apportate in memoria all'utente.
-
-\vspace{0.2cm}
+\vspace{0.3cm}
 \noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java]
-public boolean testStation(ChargingStation station) {
-   
-    if (station.getPowerKw() > station.getConnectorType().getMaxPowerKw()) {
-        System.err.println("Test fallito: Potenza eccessiva per il tipo di connettore.");
-        return false;
-    }
-
-    boolean pingSuccess = simulateConnectivityTest(station.getLatitude(), station.getLongitude());
-    if (!pingSuccess) {
-        System.err.println("Test fallito: Impossibile stabilire la connessione con la colonnina.");
-        return false;
-    }
-
-    return true;
+\begin{lstlisting}[language=Java, caption={Verifica del saldo prima dell'upgrade}]
+if (delta.compareTo(BigDecimal.ZERO) > 0 
+        && driver.getWalletBalance().compareTo(delta) < 0) {
+    throw new IllegalStateException(
+        "Fondi insufficienti: servono EUR " + delta + " per l'upgrade a " + plan.name() + ".");
 }
+BigDecimal charged = driver.updatePlan(plan);
 \end{lstlisting}
 \end{minipage}
 \vspace{0.3cm}
 
-Solo se questo test ha esito positivo, il servizio permette di sbloccare l'operazione di \texttt{approve}, aprendo una transazione che cambia lo stato della stazione e fissa in modo definitivo la tariffa trattenuta dalla piattaforma.
-
 \subsection{Gestione Feedback e Manutenzione}
+\label{sec:GestioneFeedback}
+
 Il flusso di controllo della qualità del servizio è interamente gestito dal \texttt{RatingService}. Il ciclo di vita di un feedback inizia nel momento in cui il Driver conclude una ricarica e decide di valutare l'esperienza. 
 
 In questa prima fase, il sistema esegue un duplice controllo. Dapprima verifica a livello database che l'utente non abbia già recensito quella specifica sessione; superato questo filtro, delega la validazione del formato del voto (da 1 a 5 stelle) al dominio.
@@ -349,7 +399,7 @@ La parte interessante e funzione aggiuntiva di questa componente risiede nella l
 
 \vspace{0.2cm}
 \noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java]
+\begin{lstlisting}[language=Java, caption={Ricalcolo della media e alert di manutenzione}]
 private void checkRatingAlert(Connection connection, ChargingStation station) {
     
     ratingDao.recalculateAverage(station.getId());
@@ -376,15 +426,15 @@ Una volta ricevuta la segnalazione sulla propria dashboard, sarà discrezione de
 \hrule
 \vspace{0.4cm}
 \noindent\textbf{Nota: la mappa di Firenze e il Jitter}
-\vspace{0.2cm}
+\vspace{0.4cm}
 
 Per rendere i test più verosimili, abbiamo deciso di utilizzare come ambiente geografico l'area urbana di Firenze, mappando i veri quartieri (dal Centro Storico alla periferia) tramite l'enumerazione \texttt{Zone}. 
 
 Ci siamo però accorti subito di un problema: registrando più colonnine nello stesso quartiere, queste avrebbero assunto le stesse identiche coordinate di base, finendo per sovrapporsi perfettamente in caso di futura rappresentazione grafica. Per risolverlo, abbiamo introdotto una piccola funzione di \textit{Jitter} all'interno dell'enum. Questo metodo calcola un microscopico scostamento casuale (corrispondente a circa 500 metri) e lo applica al centro esatto della zona, in modo tale da generare latitudini e longitudini leggermente diverse per ogni stazione, pur rimanendo all'interno del quartiere di riferimento.
 
-\vspace{0.2cm}
+\vspace{0.3cm}
 \noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java]
+\begin{lstlisting}[language=Java, caption={Distribuzione geografica con jitter}]
 public double[] resolveWithJitter() {
 
     double jLat = (Math.random() - 0.5) * 0.01;
@@ -441,7 +491,9 @@ Ogni schermata dell'applicazione ha un Controller associato, il cui compito è s
 
 Un dettaglio implementativo intressante si trova in \texttt{FinancialReportsController}: prima di leggere il guadagno totale dell'operatore, il controller non si fida del valore tenuto in sessione, ma lo rilegge direttamente dal database.
 
-\begin{lstlisting}[language=Java]
+\vspace{0.3cm}
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[language=Java, caption={Aggiornamento del controller con dati freschi}]
 User refreshed = NavigationManager.getAuthService().refreshUser(loggedOperator.getId());
 if (refreshed instanceof StationOperator op) {
     this.loggedOperator = op;
@@ -449,6 +501,8 @@ if (refreshed instanceof StationOperator op) {
 BigDecimal revenue = loggedOperator.getTotalEarnings() != null
         ? loggedOperator.getTotalEarnings() : BigDecimal.ZERO;
 \end{lstlisting}
+\end{minipage}
+\vspace{0.3cm}
 
 L'oggetto \texttt{User} mantenuto in sessione resta valido per identità e ruolo, ma qualunque valore in continua variazione, come per esempio il guadagno totale, aggiornato ad ogni sessione chiusa da un Driver — deve essere riletto dal Service competente all'apertura della schermata, invece di fidarsi di una copia che potrebbe non aggiornata.
 
@@ -456,7 +510,9 @@ L'oggetto \texttt{User} mantenuto in sessione resta valido per identità e ruolo
 
 Come già detto in precedenza il livello DAO si occupa di tradurre le righe delle tabelle SQL in oggetti Java e viceversa. Il \texttt{GenericDao<T>} definisce le operazioni base che garantiscono la persistenza dei dati:
 
-\begin{lstlisting}[language=Java]
+\vspace{0.3cm}
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[language=Java, caption={Interfaccia DAO generica}]
 public interface GenericDao<T> {
     void save(T entity);
     T findById(Long id);
@@ -465,6 +521,8 @@ public interface GenericDao<T> {
     void delete(Long id);
 }
 \end{lstlisting}
+\end{minipage}
+\vspace{0.3cm}
 
 Ogni entità del dominio ha poi una classe concreta (es. \texttt{PostgresUserDao}) che implementa queste operazioni scrivendo query SQL vere tramite \texttt{PreparedStatement}, ed esegue la trasformazione in entrambe le direzioni: dall'oggetto Java verso le colonne della tabella al momento del salvataggio, e dalle colonne del \texttt{ResultSet} di nuovo verso un oggetto Java al momento della lettura.
 
@@ -472,7 +530,9 @@ Ogni entità del dominio ha poi una classe concreta (es. \texttt{PostgresUserDao
 
 La tabella \texttt{users} contiene sia i Driver che gli Station Operator che gli Energy Manager, distinti da una colonna \texttt{role}. Il mapping deve quindi decidere, riga per riga, quale sottoclasse istanziare:
 
-\begin{lstlisting}[language=Java]
+\vspace{0.3cm}
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[language=Java, caption={Mapping utente da ResultSet}]
 private User extractUserFromResultSet(ResultSet rs) throws SQLException {
     Long id = rs.getLong("id");
     String name = rs.getString("name");
@@ -503,6 +563,8 @@ private User extractUserFromResultSet(ResultSet rs) throws SQLException {
     return null;
 }
 \end{lstlisting}
+\end{minipage}
+\vspace{0.3cm}
 
 Colonne come \texttt{wallet\_balance} o \texttt{total\_earnings} esistono nella tabella ma hanno senso solo per un tipo di utente: per un Energy Manager, ad esempio, restano ovviamente \texttt{NULL}. Il DAO legge la colonna \texttt{role} e usa quel valore per capire quale oggetto Java ricostruire, e quindi come debba muoversi.
 
@@ -514,13 +576,17 @@ Il mapping non chiama mai \texttt{new Driver(...)} direttamente, ma un metodo ch
 
 A volte il DAO non ha bisogno di ricostruire un oggetto per intero, ma solo di una sua parte. Nel recupero di un \texttt{RatingAlert}, ad esempio, non serve caricare l'intera colonnina collegata (tariffe, stato, coordinate...): basta sapere il suo nome, da mostrare nella schermata dell'Energy Manager.
 
-\begin{lstlisting}[language=Java]
+\vspace{0.3cm}
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[language=Java, caption={Ricostruzione parziale di ChargingStation}]
 ChargingStation station = ChargingStation.reconstitute(
         stId, null, null, stName, null, null, null, null, null, null,
         null, null, null, null, null, null, null
 );
 return RatingAlert.reconstitute(alertId, station, avgAtCreation, status, managerNote, createdAt);
 \end{lstlisting}
+\end{minipage}
+\vspace{0.3cm}
 
 Questa \texttt{ChargingStation} è effettivamente un oggetto reale (viene chiamato "stub"), ma della quale vengono inseriti solo i campi necessari, mentre il resto è \texttt{null}. In questo modo si ottiene maggiore efficienza, infatti evita una query aggiuntiva per recuperare dati che non verrebbero comunque mostrati, tuttavia nel caso in futuro venisse ripassato a un metodo che si aspetta una colonnina completa (ad esempio per un aggiornamento), andrebbe prima ricaricato per intero.
 
@@ -528,25 +594,31 @@ Questa \texttt{ChargingStation} è effettivamente un oggetto reale (viene chiama
 
 Oltre alla validazione fatta dal codice Java, anche lo schema del database applica i propri controlli, indipendentemente da cosa succede nel Business Layer:
 
-\begin{lstlisting}
+\vspace{0.3cm}
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[caption={Vincoli SQL di integrità}]
 wallet_balance DECIMAL(10, 2) CHECK (wallet_balance IS NULL OR wallet_balance >= 0),
 ...
 stars INTEGER NOT NULL CHECK (stars >= 1 AND stars <= 5),
 ...
 CONSTRAINT uq_driver_session UNIQUE (driver_id, session_id)
 \end{lstlisting}
+\end{minipage}
+\vspace{0.3cm}
 
 Se per un errore di programmazione un service riuscisse a costruire un saldo negativo o un voto fuori dal range 1-5, sarebbe comunque il database a rifiutare l'inserimento. Può essere visto come un secondo controllo: nel caso ci sia qualcosa che non vada bene nel codice Java, questo non riuscirebbe comunque a produrre dati incoerenti nel database.
 
 \section{Idiomi e Design Pattern}
-
+\label{ch:pattern}
 Per risolvere alcuni problemi e per rendere il codice aperto per un eventuale estensione futura, sono stati usati alcuni design pattern.
 
 \subsection{Observer Pattern}
-
+\label{sec: Observer Pattern}
 Quando un trasformatore (\texttt{PowerTransformer}) si scalda troppo si limita a lanciare un avviso, mentre chi lo riceve e decide cosa fare è \texttt{LoadBalancerService}.
 
-\begin{lstlisting}[language=Java]
+\vspace{0.3cm}
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[language=Java, caption={Interfacce Subject e Observer}]
 
 public interface Subject {
     void attach(Observer observer);
@@ -564,38 +636,68 @@ public enum TransformerEvent {
 }
 
 \end{lstlisting}
+\end{minipage}
+\vspace{0.3cm}
 
 Il vantaggio è che i due componenti restano indipendenti, se per esempio volessimo aggiungere un secondo componente che si limita a registrare gli allarmi, basterebbe aggiungere agli ascoltatori anche lui, senza dover modificare il codice del trasformatore.
 
 \subsection{Strategy Pattern}
-\label{ch:pattern}
+
 
 Un Driver può scegliere tra due modalità di ricarica, Fast o Eco, e ciascuna ha un proprio modo di calcolare il costo e il calore prodotto. Invece che usare un \texttt{if/else},che chiaramente sarebbe dovuta essere modificata nel caso di un'aggiunta futura, si è definita un'unica interfaccia comune che poi ogni modalità implementa diversamente. In questo modo \texttt{SessionService} si interfaccia senza sapere quale modalità di ricarica ci sia dietro.
 
-\begin{lstlisting}[language=Java]
+\vspace{0.3cm}
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[language=Java, caption={Interfaccia delle strategie di ricarica}]
 public interface ChargingStrategy {
     double calculateCost(double kwh, ChargingStation station, Driver driver);
     double getHeatIncrement();
-    String getName();
+    ChargingType getType();
 }
 \end{lstlisting}
+\end{minipage}
+\vspace{0.3cm}
 
 \subsection{Factory Method}
 
 Per evitare che alcuni oggetti possano essere creati pur non avendo rispettato determinate regole,la creazione di un oggetto deve
  passare sempre da un metodo che prima controlla che tutto sia in regola, e solo dopo costruisce l'oggetto:
 
-\begin{lstlisting}[language=Java]
-public static Rating leave(Driver driver, ChargingStation station,
-                           ChargingSession session, int stars, String comment) {
-    if (stars < 1 || stars > 5) {
-        throw new InvalidRatingException("Il voto deve essere compreso tra 1 e 5");
+\vspace{0.3cm}
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[language=Java, caption={Factory Method per la creazione del rating}]
+public static Rating leave(Driver driver, ChargingStation station, ChargingSession session,
+        Integer stars, String comment) {
+    if (stars == null || stars < 1 || stars > 5) {
+        throw new InvalidRatingException("Errore di validazione: il rating deve essere un
+            valore compreso tra 1 e 5 stelle.");
     }
-    return new Rating(driver, station, session, stars, comment, LocalDateTime.now());
+    return new Rating(driver, station, session, stars, comment);
 }
 \end{lstlisting}
+\end{minipage}
+\vspace{0.3cm}
 
 Lo stesso principio si ritrova quando si apre una sessione di ricarica, quando si registra una nuova colonnina o quando si crea un alert di qualità: in tutti questi casi il controllo e la creazione avvengono insieme, così è impossibile ottenere un oggetto "a metà", che esiste ma è in uno stato che non dovrebbe essere permesso.
+
+\vspace{0.3cm}
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[language=Java, caption={altro esempio di Factory method, qui è usato per creare alert di rating.
+    A differenza degli esempi precedenti, qui il costruttore non deve validare nulla, i dati arrivano già controllati da chi lo invoca, ma resta comunque privato per impedire di costruire un alert in uno stato diverso da \texttt{PENDING}.}]
+    private RatingAlert(ChargingStation station, Double avgAtCreation) {
+    this.station = station;
+    this.avgAtCreation = avgAtCreation;
+    this.status = RatingAlertStatus.PENDING;
+    this.managerNote = null;
+    this.createdAt = LocalDateTime.now();
+}
+
+public static RatingAlert create(ChargingStation station, Double avgAtCreation) {
+    return new RatingAlert(station, avgAtCreation);
+}
+\end{lstlisting}
+\end{minipage}
+\vspace{0.3cm}
 
 \subsection{Singleton}
 
@@ -603,7 +705,9 @@ Il sistema tiene traccia di quali colonnine sono collegate a quale trasformatore
 
 Se questa informazione fosse duplicata in due copie diverse, si rischierebbe un disallineamento tra i due componenti. La soluzione è garantire che ne esista una sola copia in tutto il programma, caricata una volta sola all'avvio e poi consultata da tutti:
 
-\begin{lstlisting}[language=java]
+\vspace{0.3cm}
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[language=java, caption={Singleton GridCluster per la cache della rete}]
 public class GridCluster {
 
     private static GridCluster instance;
@@ -640,5 +744,7 @@ public class GridCluster {
     }
 }
 \end{lstlisting}
+\end{minipage}
+\vspace{0.3cm}
 
 La parola \texttt{synchronized} su \texttt{getInstance()} serve perché più componenti girano in parallelo su thread diversi: senza questa protezione, due richieste arrivate nello stesso istante potrebbero entrambe trovare \texttt{instance} ancora nulla e crearne due copie per errore. Da notare inoltre che i dati non vengono letti dal database ad ogni richiesta: \texttt{init()} viene chiamato una sola volta all'avvio dell'applicazione, e da quel momento in poi \texttt{getStationsForTransformer()} risponde all'istante leggendo dalla mappa già in memoria, senza interrogare più il database.
