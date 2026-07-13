@@ -4,7 +4,6 @@ import it.unifi.ing.chargenet.dao.interfaces.DaoFactory;
 import it.unifi.ing.chargenet.dao.interfaces.StationDao;
 import it.unifi.ing.chargenet.dao.postgres.DatabaseManager;
 import it.unifi.ing.chargenet.domain.infrastructure.ChargingStation;
-import it.unifi.ing.chargenet.domain.users.ConnectorType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -21,7 +20,6 @@ class ValidationServiceTest {
 
     private ValidationService validationService;
 
-    // Solo il dbManager, addio Math!
     private MockedStatic<DatabaseManager> mockedDbManager;
 
     private DaoFactory daoFactoryMock;
@@ -40,82 +38,12 @@ class ValidationServiceTest {
         stationDaoMock = mock(StationDao.class);
         doReturn(stationDaoMock).when(daoFactoryMock).createStationDao(any(Connection.class));
 
-        // 3. LA MAGIA DELLO SPY: Creiamo l'oggetto vero, ma lo avvolgiamo in una "Spia" di Mockito
-        ValidationService realService = new ValidationService(daoFactoryMock);
-        validationService = spy(realService);
+        validationService = new ValidationService(daoFactoryMock);
     }
 
     @AfterEach
     void tearDown() {
         if (mockedDbManager != null) mockedDbManager.close();
-    }
-
-    @Test
-    @DisplayName("Test stazione superato con successo")
-    void testStation_Success() {
-        // --- ARRANGE ---
-        ChargingStation mockStation = mock(ChargingStation.class);
-        when(mockStation.getName()).thenReturn("Colonnina Milano Centro");
-        when(mockStation.getLatitude()).thenReturn(45.4642);
-        when(mockStation.getLongitude()).thenReturn(9.1900);
-
-        when(mockStation.getPowerKw()).thenReturn(50.0);
-        when(mockStation.getConnectorType()).thenReturn(ConnectorType.CCS_2);
-
-        // FORZIAMO IL METODO PROTECTED:
-        // Diciamo allo Spy: "Se ti chiedono di simulare la connettività, fottitene di Math.random e rispondi TRUE"
-        doReturn(true).when(validationService).simulateConnectivityTest(anyDouble(), anyDouble());
-
-        // --- ACT ---
-        boolean result = validationService.testStation(mockStation);
-
-        // --- ASSERT ---
-        assertTrue(result, "Il test della stazione deve essere superato");
-
-        // Verifichiamo che il nostro Spy abbia effettivamente intercettato la chiamata
-        verify(validationService, times(1)).simulateConnectivityTest(45.4642, 9.1900);
-    }
-
-    @Test
-    @DisplayName("Test stazione fallito per potenza eccessiva")
-    void testStation_Fail_PowerTooHigh() {
-        // --- ARRANGE ---
-        ChargingStation mockStation = mock(ChargingStation.class);
-
-        // Impostiamo una potenza esagerata (400.0 kW) per un connettore che ne regge massimo 350.0
-        when(mockStation.getPowerKw()).thenReturn(400.0);
-        when(mockStation.getConnectorType()).thenReturn(ConnectorType.CCS_2);
-
-        // --- ACT ---
-        boolean result = validationService.testStation(mockStation);
-
-        // --- ASSERT ---
-        assertFalse(result, "Il test deve fallire a causa della potenza eccessiva");
-
-        // Verifica che il test si sia fermato subito SENZA provare a fare il ping di rete
-        verify(validationService, never()).simulateConnectivityTest(anyDouble(), anyDouble());
-    }
-
-    @Test
-    @DisplayName("Test stazione fallito per errore connettività (Ping fallito)")
-    void testStation_Fail_PingError() {
-        // --- ARRANGE ---
-        ChargingStation mockStation = mock(ChargingStation.class);
-        when(mockStation.getLatitude()).thenReturn(45.4642);
-        when(mockStation.getLongitude()).thenReturn(9.1900);
-
-        // La potenza va bene
-        when(mockStation.getPowerKw()).thenReturn(50.0);
-        when(mockStation.getConnectorType()).thenReturn(ConnectorType.CCS_2);
-
-        // FORZIAMO IL FALLIMENTO: Diciamo allo Spy di simulare un errore di rete
-        doReturn(false).when(validationService).simulateConnectivityTest(anyDouble(), anyDouble());
-
-        // --- ACT ---
-        boolean result = validationService.testStation(mockStation);
-
-        // --- ASSERT ---
-        assertFalse(result, "Il test deve fallire se la colonnina non risponde al ping");
     }
 
     @Test

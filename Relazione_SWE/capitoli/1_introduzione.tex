@@ -9,16 +9,16 @@ Per raggiungere questo obiettivo, la piattaforma fa da punto di incontro per tre
 \begin{itemize}
     \item \textbf{Driver:} È l'utente finale. Utilizza il sistema per cercare le stazioni compatibili con la sua auto, far partire e monitorare la ricarica, e gestire i pagamenti tramite un portafoglio virtuale interno (wallet).
     
-    \item \textbf{Station Operator:} È l'addetto alla manutenzione fisica. Il suo compito è controllare lo stato di salute delle colonnine: se una stazione si guasta, può metterla temporaneamente fuori servizio per evitare disagi ai Driver, e registrarla di nuovo come attiva una volta riparata.
-    
-    \item \textbf{Energy Manager:} È il tecnico supervisore della rete elettrica. Controlla in tempo reale il carico sui trasformatori per evitare surriscaldamenti. Se la rete è sotto stress, ha gli strumenti per abbassare la potenza erogata o limitare le ricariche (Load Balancing) in modo da proteggere l'infrastruttura.
+    \item \textbf{Station Operator:} È il proprietario delle colonnine. Registra nella piattaforma le nuove stazioni con i loro parametri tecnici (potenza, connettore, quartiere) e la tariffa che intende applicare, e ne segue l'andamento economico: guadagni maturati, energia venduta e numero di sessioni erogate. Non decide però da solo se una colonnina entra in rete: ogni nuova registrazione resta in attesa dell'approvazione dell'Energy Manager.
+
+    \item \textbf{Energy Manager:} È il supervisore della rete. Il suo ruolo è duplice. Da un lato \emph{autorizza}: approva o rifiuta le colonnine proposte dagli operatori e, approvandole, ne fissa la quota di tariffa trattenuta dalla piattaforma; interviene inoltre sulle colonnine segnalate per qualità scadente, sospendendole o archiviando la segnalazione. Dall'altro \emph{sorveglia}: una dashboard gli mostra in tempo reale carico e temperatura di ogni trasformatore. La protezione dell'infrastruttura in caso di surriscaldamento, però, non è una sua azione manuale: è il sistema stesso a reagire in autonomia interrompendo le ricariche sul ramo in sovraccarico (\textit{Load Balancing}, descritto nel paragrafo~\ref{sec: Observer Pattern}). L'Energy Manager osserva l'emergenza, non la governa premendo un pulsante.
 \end{itemize}
 
 \section{Stack Tecnologico}
 
 \begin{itemize}
   \item \textbf{Linguaggio}: Java, essendo un linguaggio fortemente orientato agli oggetti, ci ha permesso di modellare in modo chiaro le entità del dominio e le loro interazioni.
-  \item \textbf{Interfaccia grafica}: JavaFX con FXML, che separa il i file \texttt{.fxml} dai \texttt{Controller}.
+  \item \textbf{Interfaccia grafica}: JavaFX con FXML, che separa la descrizione del layout (i file \texttt{.fxml}) dalla logica di schermata (i \texttt{Controller}).
   \item \textbf{Persistenza}: database relazionale PostgreSQL. In sviluppo si è
   usato H2 in modalità \texttt{MODE=PostgreSQL}, così da accettare la stessa
   sintassi SQL e rendere veloce e semplice il passaggio a PostgreSQL.

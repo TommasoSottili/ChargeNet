@@ -34,15 +34,18 @@ skinparam package<<persistence>> {
 ' ==========================================
 package "presentation" <<ui>> as presentation {
     package "navigation"
-    package "session"
-    package "controller" 
+    package "core"
+    package "controller"
 }
 
 ' ==========================================
 ' BUSINESS LAYER (LOGIC)
 ' ==========================================
 package "business" <<business>> as business {
-    package "services" 
+    package "services"
+    package "core" as businesscore
+    package "strategies"
+    package "utils"
 }
 
 ' ==========================================
@@ -50,9 +53,11 @@ package "business" <<business>> as business {
 ' ==========================================
 package "domain" <<domain>> as domain {
     package "users"
-    package "stations"
+    package "infrastructure"
     package "sessions"
-    package "billing"
+    package "financials"
+    package "feedback"
+    package "observer"
 }
 
 ' ==========================================
@@ -73,11 +78,22 @@ presentation ..> domain : <<uses>>
 
 services ..> interfaces : <<uses>>
 services ..> domain : <<manipulates>>
+strategies ..> domain : <<uses>>
+businesscore ..> domain : <<uses>>
 
 postgres ..> interfaces : <<implements>>
 dao ..> domain : <<maps>>
 
 postgres ..> PostgreSQL : <<persists>>
+
+' REGOLA D'ORO: nessuna freccia esce dal package domain.
+' Il Domain Model non dipende da nessun altro livello.
+note right of domain
+  **Il domain non dipende da nulla.**
+  Nessuna classe sotto //domain// importa
+  //business//, //dao// o //presentation//:
+  tutte le frecce entrano, nessuna esce.
+end note
 
 ' ==========================================
 ' ALLINEAMENTO SPAZIALE FORZATO

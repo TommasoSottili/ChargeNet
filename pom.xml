@@ -28,7 +28,7 @@
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
-            <version>42.7.1</version>
+            <version>42.7.4</version>
         </dependency>
 
         <dependency>
@@ -51,10 +51,13 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Solo per i test dei DAO: H2 in MODE=PostgreSQL esegue lo stesso scheme.sql
+             della produzione. La produzione gira su PostgreSQL: scope test. -->
         <dependency>
-            <groupId>org.postgresql</groupId>
-            <artifactId>postgresql</artifactId>
-            <version>42.7.4</version>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>2.2.224</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

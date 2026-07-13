@@ -2,7 +2,7 @@
 title Approvazione colonnina — l'Energy Manager fissa la tariffa piattaforma
 
 actor "Energy Manager" as MGR
-participant "StationApprovalQueue\nController" as C
+participant "ApprovalQueue\nController" as C
 participant "StationService" as STS
 participant "ValidationService" as VS
 participant "ChargingStation\n«Entity»" as STA

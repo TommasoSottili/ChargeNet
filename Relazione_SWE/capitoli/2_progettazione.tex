@@ -39,7 +39,34 @@ Il diagramma di navigazione illustra in che modo le diverse schermate dell'appli
 \end{figure}
 
 \section{Package Diagram}
-Passando all'architettura interna del software, il diagramma dei pacchetti mostra come il codice è stato diviso in moduli logici (come ad esempio la logica di business, l'interfaccia e l'accesso ai dati). L'obiettivo è mantenere il progetto ordinato e limitare le dipendenze tra i vari componenti.
+\label{sec:package}
+
+Passando all'architettura interna, il codice è organizzato in \textbf{quattro livelli sovrapposti} sotto il package base \texttt{it.unifi.ing.chargenet}, ciascuno con una responsabilità precisa:
+
+\begin{itemize}
+    \item \textbf{presentation} — tutto ciò che l'utente vede: i Controller delle schermate JavaFX e il \texttt{NavigationManager}, che decide quale schermata mostrare. Non sa nulla di query o di database: chiede ai servizi di fare qualcosa e ne mostra il risultato.
+    \item \textbf{business} — la logica applicativa: i \textit{Service}, le strategie di ricarica e i componenti che fanno girare la simulazione (\texttt{GridMonitor}, \texttt{GridCluster}, \texttt{LoadBalancerService}). È qui che vivono le regole del \emph{cosa deve succedere}.
+    \item \textbf{dao} — la traduzione fra oggetti Java e righe di tabella. È l'unico livello che sa com'è fatto il database.
+    \item \textbf{domain} — le entità: \texttt{ChargingStation}, \texttt{ChargingSession}, \texttt{Driver}, \texttt{PowerTransformer} e le altre. Non sono contenitori di dati passivi, ma oggetti \emph{ricchi}, che sanno fare ciò che riguarda la loro natura: è la \texttt{ChargingStation} stessa a sapere come si calcola il prezzo di una ricarica, ed è la \texttt{ChargingSession} stessa a sapere a quali condizioni può essere aperta.
+\end{itemize}
+
+% TODO: esportare docs/package-diagram.puml in Relazione_SWE/images/package_diagram.png
+% e poi DECOMMENTARE il blocco qui sotto. Il testo che segue fa riferimento a questa figura.
+%
+% \begin{figure}[H]
+%     \centering
+%     \includegraphics[width=0.85\textwidth]{package_diagram.png}
+%     \caption{Diagramma dei package: verso \texttt{domain} entrano frecce da tutti i livelli, ma da esso non ne esce nessuna.}
+%     \label{fig:package_diagram}
+% \end{figure}
+
+\subsection*{La regola d'oro: il dominio non dipende da nulla}
+
+Il vincolo che ha guidato l'intera architettura si enuncia in una riga: \textbf{nessuna classe del livello \texttt{domain} dipende da un altro livello}. Le entità non sanno che esistono servizi, controller o database. Nel diagramma questo si legge a colpo d'occhio: verso il package \texttt{domain} entrano frecce da tutti gli altri livelli, ma da esso non ne esce nessuna. È una proprietà verificabile meccanicamente, non un'intenzione: nell'intero package \texttt{domain} non compare un solo \texttt{import} di \texttt{business}, \texttt{dao} o \texttt{presentation}.
+
+La regola ha avuto conseguenze concrete, non decorative. Un esempio: il calcolo del prezzo base di una ricarica è stato messo sulla \texttt{ChargingStation} (dominio puro) e non sull'interfaccia delle strategie (che vive nel business), proprio perché così \emph{sia} il dominio \emph{sia} il business possono usarlo senza che il dominio debba "guardare verso l'alto". La scelta opposta avrebbe reso il cuore stabile del sistema dipendente da uno strato più esterno e più volatile.
+
+Il beneficio si è visto in modo tangibile nella migrazione da H2 a PostgreSQL: entità, servizi e controller sono rimasti \emph{intatti}, perché nessuno di loro sapeva quale database ci fosse sotto. Le uniche cose toccate sono state la configurazione della connessione e il bootstrap del database. Un'architettura a livelli si giudica esattamente così: non da quanto è bella sulla carta, ma da quanto codice bisogna riscrivere quando cambia qualcosa in fondo alla pila.
 
 \section{Class Diagram}
 Il sistema è stato progettato con un'architettura a strati per mantenere alta coesione e basso accoppiamento (\textit{high coesion and low coupling}). Nel seguente paragrafo sono approfondite le classi principali:
@@ -128,7 +155,26 @@ A quel punto il \texttt{LoadBalancerService} interviene in due passaggi separati
 
 \section{Database}
 
-La gestione dei dati di ChargeNet è affidata a un database relazionale PostgreSQL. Inizialmente, per velocizzare il lavoro, si è scelto di lavorare inizialmente con H2. Questo ha permesso di scrivere query e testare la parte applicativa fin da subito, per poi occuparsi successivamente dell'installazione e configurazione del database reale, passaggio che è stato comunque rapido visto che non è stato necessario modificare la sintassi SQL (H2 è stato usato in modalità \texttt{MODE=PostgreSQL})
+La gestione dei dati di ChargeNet è affidata a un database relazionale PostgreSQL. In fase di sviluppo si è però lavorato con \textbf{H2}, un database che può girare interamente in memoria: non richiede installazione, si avvia e si spegne con l'applicazione ed è velocissimo. Questo ha permesso di scrivere query e provare l'applicazione fin dal primo giorno, rimandando l'installazione e la configurazione del database reale.
+
+L'accortezza che ha reso possibile il passaggio è stata usare H2 fin dall'inizio in modalità \texttt{MODE=PostgreSQL}, e scrivere lo schema con tipi e sintassi standard di Postgres (\texttt{BIGSERIAL} per le chiavi auto-incrementanti, \texttt{DECIMAL}, \texttt{TIMESTAMP}, \texttt{BOOLEAN}). Il risultato è che \textbf{nessuna query dei DAO è stata riscritta} e nessun Service o Controller si è accorto del cambiamento: è la dimostrazione più concreta del valore della regola d'oro enunciata nel paragrafo~\ref{sec:package}.
+
+Sarebbe però disonesto presentare la migrazione come un semplice cambio di stringa di connessione: il lavoro reale è stato di natura diversa, e riguarda il fatto che un database \emph{persistente} pone problemi che un database in memoria non pone. Con H2 in memoria, ogni avvio ripartiva da zero e lo schema poteva essere ricreato ogni volta da capo; con PostgreSQL i dati \textbf{sopravvivono} fra un avvio e l'altro, e un bootstrap distruttivo avrebbe cancellato tutto ad ogni riapertura. Il bootstrap è stato quindi reso \textbf{idempotente}: le istruzioni \texttt{DROP TABLE} sono state eliminate in favore di \texttt{CREATE TABLE IF NOT EXISTS}, e soprattutto il \emph{seed} dei dati iniziali viene eseguito solo se il database risulta vuoto, con un controllo esplicito che conta le righe della tabella \texttt{users}.
+
+\vspace{0.3cm}
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[language=Java, caption={Bootstrap idempotente: lo schema si crea se manca, il seed solo su DB vuoto}]
+// Ri-seedare ad ogni avvio duplicherebbe tutto (e violerebbe UNIQUE su email)
+if (isDatabaseEmpty(conn)) {
+    seedData(conn);
+} else {
+    System.out.println("[DatabaseManager] DB gia' popolato, seed saltato.");
+}
+\end{lstlisting}
+\end{minipage}
+\vspace{0.3cm}
+
+Un secondo avvio ritrova quindi gli stessi dati invece di duplicarli o azzerarli, che è precisamente la prova che la persistenza funziona. È anche la lezione più utile imparata sul campo, perché il problema si è presentato prima in forma di bug: in una versione iniziale lo schema veniva rieseguito ad \emph{ogni} connessione e, siccome il file iniziava cancellando le tabelle, ogni operazione di fatto azzerava il database. La registrazione di un utente funzionava, ma al login successivo l'utente era già sparito. Averlo trasformato in un'inizializzazione unica ha risolto il problema alla radice, e ha insegnato a distinguere con precisione \emph{ciò che va fatto una volta sola} da \emph{ciò che va fatto sempre}.
 
 \subsection{Schema ER}
 
@@ -206,7 +252,7 @@ session\_id \ \ si riferisce a \ \ ChargingSessions(id)
     \item[] \textsc{unique}(\dots) \ — \ Vincolo di unicità su una combinazione di più colonne.
 \end{itemize}
 
-La colonna \texttt{role} in \texttt{Users} dice se la riga rappresenta un Driver, uno StationOperator o un EnergyManager. Colonne come \texttt{wallet\_balance} (Driver) o \texttt{total\_earnings} (StationOperator) esistono per tutte le righe della tabella, ma restano \texttt{NULL} per i sottotipi a cui non appartengono. Per esempio ovviamente non ha senso che \texttt{EnergyManager} abbia un valore diverso da \texttt{null} nell'attributo \texttt{subscription\_plan}. È lo stesso meccanismo già visto nel paragrafo ORM riguardo il metodo \texttt{extractUserFromResultSet()}, che legge la colonna \texttt{role} e ricostruisce l'oggetto Java del sottotipo corretto.
+La colonna \texttt{role} in \texttt{Users} dice se la riga rappresenta un Driver, uno StationOperator o un EnergyManager. Colonne come \texttt{wallet\_balance} (Driver) o \texttt{total\_earnings} (StationOperator) esistono per tutte le righe della tabella, ma restano \texttt{NULL} per i sottotipi a cui non appartengono. Per esempio ovviamente non ha senso che \texttt{EnergyManager} abbia un valore diverso da \texttt{null} nell'attributo \texttt{subscription\_plan}. È lo stesso meccanismo descritto nel paragrafo~\ref{sec:dao} a proposito del metodo \texttt{extractUserFromResultSet()}, che legge la colonna \texttt{role} e ricostruisce l'oggetto Java del sottotipo corretto.
 
 
 Per quanto riguarda invece le due FK verso \texttt{Users} in \texttt{ChargingStations} (\texttt{operator\_id} e \texttt{reserved\_by\_id}) modellano due relazioni indipendenti — chi possiede la colonnina e chi la sta eventualmente prenotando, ed è proprio per questo che solo la seconda può essere nulla.
@@ -215,4 +261,8 @@ Il vincolo \texttt{UNIQUE (driver\_id, session\_id)} sulla tabella \texttt{Ratin
 
 Infine, diversi attributi numerici sono protetti da vincoli \texttt{CHECK} direttamente nello schema (es. \texttt{stars} tra 1 e 5, \texttt{wallet\_balance} sempre $\geq 0$): questi vincoli sono una seconda difesa rispetto alla validazione già presente nel Domain Model, indipendente da eventuali bug nel codice Java.
 
-E' presente un limite, conseguenza della generalizzazione utilizzata: la foreign key \texttt{operator\_id} garantisce solo che l'id referenziato esista in \texttt{Users}, non che quella riga appartenga effettivamente a uno StationOperator, lo stesso vale per \texttt{driver\_id} rispetto ai Driver. Questo vincolo di coerenza tra ruolo e utilizzo non è esprimibile a livello di schema relazionale standard, tuttavia è comunque garantito nel codice Java. Infatti il metodo \texttt{StationService.registerStation()} accetta come parametro un \texttt{StationOperator}, non un generico \texttt{User}: un Driver non potrebbe essere passato a quel metodo nemmeno volendo, perché il codice non compilerebbe. La sicurezza che manca allo schema relazionale è quindi comunque garantita ma non appunto da quest'ultimo.
+E' presente un limite, conseguenza della generalizzazione utilizzata: la foreign key \texttt{operator\_id} garantisce solo che l'id referenziato esista in \texttt{Users}, non che quella riga appartenga effettivamente a uno StationOperator; lo stesso vale per \texttt{driver\_id} rispetto ai Driver. Questo vincolo di coerenza fra ruolo e utilizzo non è esprimibile a livello di schema relazionale standard.
+
+Nel percorso applicativo il buco è chiuso dal sistema di tipi di Java: \texttt{StationService.registerStation()} accetta come parametro uno \texttt{StationOperator}, non un generico \texttt{User}, e passargli un \texttt{Driver} non compilerebbe nemmeno. È bene però essere precisi sulla portata di questa garanzia, perché è più debole di quanto sembri: vale per il \emph{codice applicativo}, non per il database. Una \texttt{INSERT} scritta a mano, o uno script di popolamento iniziale, possono benissimo scrivere in \texttt{operator\_id} l'id di un Driver, e il database la accetterebbe senza obiezioni, perché quell'id in \texttt{Users} esiste davvero.
+
+Non è un'ipotesi teorica: è esattamente il punto da cui è passato un bug reale del seed, in cui alcune colonnine erano state attribuite per errore al driver invece che all'operatore, sballando poi le dashboard dei guadagni. La conclusione corretta è quindi che la coerenza fra ruolo e riferimento è garantita \emph{dal codice}, non \emph{dallo schema}: è una difesa forte finché tutte le scritture passano dai Service, e cade non appena qualcosa scrive nel database aggirandoli. Un'alternativa che l'avrebbe resa strutturale sarebbe stata tradurre la generalizzazione in tabelle separate per sottotipo, al prezzo però di join aggiuntive su ogni login: si è preferita la semplicità della tabella unica, accettando consapevolmente questo limite.

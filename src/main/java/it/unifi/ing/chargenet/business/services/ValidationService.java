@@ -5,7 +5,6 @@ import it.unifi.ing.chargenet.dao.interfaces.StationDao;
 import it.unifi.ing.chargenet.dao.postgres.DatabaseManager;
 import it.unifi.ing.chargenet.domain.infrastructure.ChargingStation;
 
-import java.util.List;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.math.BigDecimal;
@@ -16,26 +15,6 @@ public class ValidationService {
 
     public ValidationService(DaoFactory daoFactory) {
         this.daoFactory = daoFactory;
-    }
-
-    public boolean testStation(ChargingStation station) {
-        // 1. Controllo di coerenza tecnica:
-        // La potenza dichiarata non può superare il limite fisico del connettore.
-        // NOTA: controlla che la tua classe ConnectorType abbia il metodo getMaxPowerKw()
-        if (station.getPowerKw() > station.getConnectorType().getMaxPowerKw()) {
-            System.err.println("[ValidationService] Test fallito: Potenza eccessiva per il tipo di connettore.");
-            return false;
-        }
-
-        // 2. Simulazione test di connettività (ping verso la colonnina fisica fittizia)
-        boolean pingSuccess = simulateConnectivityTest(station.getLatitude(), station.getLongitude());
-        if (!pingSuccess) {
-            System.err.println("[ValidationService] Test fallito: Impossibile stabilire la connessione con la colonnina.");
-            return false;
-        }
-
-        System.out.println("[ValidationService] Test superato con successo per la colonnina: " + station.getName());
-        return true;
     }
 
     public void approve(ChargingStation station, BigDecimal platformTariff) {
@@ -99,12 +78,6 @@ public class ValidationService {
         } finally {
             closeQuietly(connection);
         }
-    }
-
-    protected boolean simulateConnectivityTest(double lat, double lng) {
-        // Simulazione: Diciamo che il ping fallisce casualmente 1 volta su 10 (10% di failure rate)
-        // per simulare problemi di rete reali durante i test dell'Energy Manager.
-        return Math.random() > 0.10;
     }
 
     private void rollbackQuietly(Connection connection) {

@@ -57,7 +57,7 @@ class ChargingStrategiesTest {
     @Test
     void testEcoStrategyBasics() {
         assertEquals(ChargingType.ECO, ecoStrategy.getType());
-        assertEquals(1.0, ecoStrategy.getHeatIncrement(), "L'incremento termico ECO deve essere 1.0");
+        assertEquals(4.0, ecoStrategy.getHeatIncrement(), "L'incremento termico ECO deve essere 4.0");
     }
 
     @Test
@@ -96,7 +96,9 @@ class ChargingStrategiesTest {
     @Test
     void testFastStrategyBasics() {
         assertEquals(ChargingType.FAST, fastStrategy.getType());
-        assertEquals(2.0, fastStrategy.getHeatIncrement(), "L'incremento termico FAST deve essere 2.0");
+        assertEquals(8.0, fastStrategy.getHeatIncrement(), "L'incremento termico FAST deve essere 8.0");
+        assertTrue(fastStrategy.getHeatIncrement() > ecoStrategy.getHeatIncrement(),
+                "Una ricarica veloce deve sempre scaldare piu' di una ricarica economica");
     }
 
     @Test

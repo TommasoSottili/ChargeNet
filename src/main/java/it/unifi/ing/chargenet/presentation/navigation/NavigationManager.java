@@ -149,6 +149,6 @@ public class NavigationManager {
     }
 
     public static DriverService getDriverService() {
-        return new DriverService(getDaoFactory());
+        return new DriverService(daoFactory);
     }
 }

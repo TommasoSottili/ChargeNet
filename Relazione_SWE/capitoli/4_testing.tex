@@ -1,4 +1,5 @@
 \chapter{Testing}
+\label{ch:testing}
 
 \section{Strategia di Verifica}
 
@@ -46,6 +47,10 @@ void testEcoCalculateCostWithSubscriptionDiscount() {
 \vspace{0.3cm}
 
 Riscrivere la formula nel test invece di limitarsi a un valore atteso hardcoded (es. \texttt{assertEquals(33.30, ...)}) ha un vantaggio: se le tariffe di test cambiano, il valore atteso si ricalcola automaticamente insieme a esse, e il test continua a verificare la \emph{relazione} tra i numeri (lo sconto si applica solo alla quota piattaforma) invece di un singolo numero fisso che potrebbe diventare scorrelato dalla logica reale.
+
+Va però riconosciuto il rovescio della medaglia, perché è un'obiezione legittima: duplicando la formula di produzione dentro l'oracolo del test, un errore \emph{sistematico} nella formula verrebbe copiato in entrambe le copie e il test passerebbe lo stesso. Un oracolo scritto ricalcolando la stessa logica non può, da solo, dimostrarne la correttezza. La scelta resta comunque difendibile, a patto di essere chiari su cosa questi test verificano davvero: non il valore assoluto del prezzo, ma l'\textbf{invariante di dominio} che quel valore deve rispettare, cioè che lo sconto dell'abbonamento morda \emph{solo} sulla quota della piattaforma e mai su quella dell'operatore. Non a caso l'oracolo non ricopia \texttt{priceFor()} riga per riga: ricostruisce il prezzo a partire dalle due componenti separate, e sarebbe quindi il primo a cadere se qualcuno, in produzione, applicasse per errore lo sconto anche alla quota dell'operatore.
+
+Questa regola merita una precisazione, perché nel codice convivono due sconti diversi. Lo sconto \emph{dell'abbonamento} si applica alla sola quota piattaforma; lo sconto \emph{della modalità Eco} (un ulteriore 10\%) si applica invece al prezzo base complessivo. Non è un'incoerenza: in entrambi i casi lo sconto è a carico della piattaforma, perché allo Station Operator viene comunque accreditata la sua quota piena sull'energia erogata (paragrafo~\ref{subsec:sessionservice}). È la piattaforma a finanziare le promozioni, non chi possiede la colonnina.
 
 \subsection{Singleton e reset dello stato : \texttt{GridClusterTest}}
 
@@ -182,6 +187,70 @@ verify(sessionServiceMock, times(1)).forceClose(sessionMock);
 \vspace{0.3cm}
 
 L'ultima riga è la più importante: verifica che \texttt{LoadBalancerService} non sappia \emph{come} si chiude una sessione (rimborso, aggiornamento wallet), sappia solo \emph{che} va chiusa — la stessa separazione di responsabilità già discussa a proposito di \texttt{LoadBalancerService} nel capitolo sul Business Layer.
+
+\subsection{Il cuore economico: \texttt{SessionServiceTest}}
+
+Il \texttt{SessionService} è il servizio più esposto del sistema, perché viene invocato ad ogni tick per ogni ricarica in corso ed è l'unico che muove denaro. È quindi anche il più testato (19 test). Ne riportiamo due, scelti perché verificano due proprietà che una semplice ispezione del codice non garantirebbe.
+
+Il primo riguarda \textbf{dove} vengono fatti i controlli di business. Un Driver senza fondi non deve poter aprire una sessione: la regola vive nel dominio (\texttt{ChargingSession.open()}), e il test verifica non solo che l'eccezione venga lanciata, ma che ciò accada \emph{prima} di toccare il database:
+
+\vspace{0.3cm}
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[language=Java, caption={La validazione di dominio precede l'accesso al database}]
+InsufficientBalanceException ex = assertThrows(InsufficientBalanceException.class, () ->
+        sessionService.openSession(poorDriver, station, strategy, 20.0)
+);
+assertTrue(ex.getMessage().contains("insufficiente"));
+
+// Il fallimento avviene PRIMA di toccare il DB
+verify(daoFactoryMock, never()).createSessionDao(any());
+\end{lstlisting}
+\end{minipage}
+\vspace{0.3cm}
+
+L'ultima riga è la parte interessante: \texttt{verify(..., never())} sulla factory dei DAO non verifica un risultato, ma un \emph{non-evento}. Fissa per contratto che una sessione senza copertura economica non arrivi nemmeno ad aprire una connessione: un test black-box sul solo valore di ritorno non potrebbe distinguere questo caso da uno in cui il database viene interrogato e poi il lavoro annullato.
+
+Il secondo test verifica l'invariante contabile più importante del sistema, cioè che \textbf{allo Station Operator venga accreditata la sua quota, e solo la sua}. La quota è definita come tariffa operatore $\times$ kWh erogati; sul valore effettivamente accreditato si usa un \texttt{ArgumentCaptor}:
+
+\vspace{0.3cm}
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[language=Java, caption={Cattura dell'importo accreditato all'operatore alla chiusura}]
+ChargingSession session = ChargingSession.open(driver, station, ChargingType.FAST, 20.0);
+session.addTick(10.0, new BigDecimal("5.00"));   // kWh erogati = 10.0
+
+sessionService.closeSession(session);
+
+ArgumentCaptor<BigDecimal> captor = ArgumentCaptor.forClass(BigDecimal.class);
+verify(fullOperator, times(1)).addEarnings(captor.capture());
+assertEquals(0, captor.getValue().compareTo(new BigDecimal("3.00")),
+        "La quota deve essere 0.30 x 10 = 3.00");
+\end{lstlisting}
+\end{minipage}
+\vspace{0.3cm}
+
+Due dettagli meritano attenzione. Il primo è il confronto: si usa \texttt{compareTo(...) == 0} e non \texttt{assertEquals} diretto sui \texttt{BigDecimal}, perché \texttt{BigDecimal.equals()} confronta anche la \emph{scala}, e considererebbe \texttt{3.00} diverso da \texttt{3.0}. Su un test che verifica denaro, un confronto ingenuo produrrebbe falsi allarmi: si confrontano i \emph{valori}, non la loro rappresentazione. Il secondo è la scelta di \texttt{times(1)}: insieme ai test gemelli \texttt{testCloseSession\_NoOperator\_NoCredit} e \texttt{testForceClose\_CreditsOperator}, questo verifica la guardia \texttt{wasActive} discussa nel paragrafo~\ref{subsec:sessionservice}, cioè che l'operatore non possa essere pagato due volte per la stessa energia.
+
+\subsection{La concorrenza sulle prenotazioni: \texttt{StationServiceTest}}
+
+L'altro punto delicato è l'acquisizione di una prenotazione, dove il servizio si affida a un update condizionale del database anziché a una coppia lettura/scrittura. Il test simula lo scenario di corsa mockando la risposta del DAO: \texttt{acquireAtomicHold} restituisce \texttt{false}, cioè "la \texttt{UPDATE} non ha aggiornato alcuna riga, qualcun altro è arrivato prima".
+
+\vspace{0.3cm}
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[language=Java, caption={Il perdente della corsa non prenota, e non lascia una transazione a metà}]
+// Simuliamo che qualcun altro abbia gia' preso la colonnina
+when(stationDaoMock.acquireAtomicHold(100L, 1L)).thenReturn(false);
+
+StationNotAvailableException exception = assertThrows(StationNotAvailableException.class, () ->
+        stationService.hold(mockDriver, mockStation));
+
+verify(mockStation, never()).setReserved(any());   // niente mutazione in memoria
+verify(connectionMock, never()).commit();          // niente commit
+verify(connectionMock, times(1)).rollback();       // e la transazione viene chiusa pulita
+\end{lstlisting}
+\end{minipage}
+\vspace{0.3cm}
+
+Le tre \texttt{verify} finali sono il vero contenuto del test, e verificano tre proprietà distinte: che l'oggetto in memoria non venga sporcato con una prenotazione che il database ha rifiutato (altrimenti memoria e DB divergerebbero), che nulla venga confermato, e che la transazione venga esplicitamente annullata invece di essere semplicemente abbandonata. Il test speculare (\texttt{testHold\_Success}) verifica il percorso opposto sulla stessa transazione.
 
 \section{Livello 2: Persistence Layer (DAO)}
 
