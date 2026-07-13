@@ -21,12 +21,191 @@ Per evitare ambiguità, i casi d'uso più importanti sono stati documentati nel 
 
 \begingroup
 \renewcommand{\arraystretch}{1.4}
-\input{templates/prenotazione_short_term.tex} 
+\input{templates/prenotazione_short_term.tex}
+\endgroup
+
+\begingroup
+\renewcommand{\arraystretch}{1.4}
+\input{templates/gestione_rating_alert.tex}
+\endgroup
+
+\begingroup
+\renewcommand{\arraystretch}{1.4}
+\input{templates/aggiornamento_stato_sistema.tex}
 \endgroup
 
 \section{Mockups}
-In questa fase sono stati realizzati i mockup dell'interfaccia grafica per verificare la User Experience e garantire
-che tutte le funzionalità descritte nei casi d'uso siano accessibili in modo immediato ed intuitivo.
+\label{sec:gui}
+
+Di seguito sono riportate le schermate dell'applicazione, raggruppate per attore e presentate nell'ordine in cui l'utente le incontra. L'obiettivo di questa sezione è mostrare come le funzionalità descritte nei casi d'uso siano state rese accessibili in modo immediato, e come a ciascun ruolo venga presentato soltanto ciò che gli compete: le tre aree (Driver, Station Operator ed Energy Manager) sono separate fin dal login, che instrada l'utente verso la dashboard del proprio ruolo.
+
+\subsection{Autenticazione}
+
+\subsubsection{Login}
+La schermata di accesso raccoglie email e password e delega la verifica all'\texttt{AuthService}, che confronta l'hash BCrypt della password. Riconosciuto l'utente, il sistema lo indirizza automaticamente alla dashboard corrispondente al suo ruolo.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{mockups/login.PNG}
+    \caption{Schermata di login.}
+    \label{fig:gui_login}
+\end{figure}
+
+\subsubsection{Registrazione}
+La registrazione raccoglie i dati del nuovo account e il ruolo desiderato. Il flusso cambia in base al ruolo scelto: solo al Driver vengono richiesti i dati del veicolo (tipo di connettore e capacità della batteria) e viene assegnata una posizione GPS iniziale simulata, necessaria per ordinare le colonnine per vicinanza.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{mockups/registrazione.PNG}
+    \caption{Schermata di registrazione.}
+    \label{fig:gui_registrazione}
+\end{figure}
+
+\subsection{Area Driver}
+
+\subsubsection{Menu del Driver}
+È il contenitore della dashboard del Driver: mostra il saldo del portafoglio e la posizione corrente, e dà accesso alle altre schermate. Se una ricarica è ancora in corso, compare una card \textit{Resume} che riporta alla sessione attiva: la ricarica infatti prosegue anche se il Driver esce dalla schermata, perché ad avanzarla è il \texttt{GridMonitor} in background e non l'interfaccia.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{mockups/driverMenu.PNG}
+    \caption{Menu del Driver.}
+    \label{fig:gui_driver_menu}
+\end{figure}
+
+\subsubsection{Esplorazione delle colonnine}
+La schermata mostra \emph{soltanto} le colonnine che il Driver può realmente usare: attive, compatibili con il connettore del suo veicolo e ordinate dalla più vicina alla più lontana. Le colonnine occupate, in sovraccarico o incompatibili non vengono mostrate affatto, perché proporre opzioni non selezionabili sarebbe un difetto di esperienza d'uso. Fanno eccezione le colonnine prenotate dal Driver stesso, che restano visibili con l'apposita etichetta.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{mockups/stationExplorer.PNG}
+    \caption{Esplorazione delle colonnine disponibili.}
+    \label{fig:gui_station_explorer}
+\end{figure}
+
+\subsubsection{Sessione di ricarica in tempo reale}
+Il Driver sceglie la modalità (Fast o Eco), indica la percentuale di batteria iniziale e avvia la ricarica. Da quel momento la schermata non calcola nulla: rilegge lo stato della sessione dal database una volta al secondo e aggiorna a video batteria, energia erogata, costo e saldo residuo.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{mockups/liveSession.PNG}
+    \caption{Sessione di ricarica in tempo reale.}
+    \label{fig:gui_live_session}
+\end{figure}
+
+\subsubsection{Ricarica del portafoglio}
+La schermata permette di aggiungere fondi al portafoglio, scegliendo uno degli importi predefiniti oppure digitandone uno personalizzato; ogni versamento genera una transazione registrata nello storico contabile. Il metodo di pagamento mostrato in figura è un \emph{segnaposto grafico}: come dichiarato tra le semplificazioni consapevoli (paragrafo~\ref{sec:semplificazioni}), il portafoglio è interno alla piattaforma e non esiste alcuna integrazione con circuiti di pagamento reali. La conferma non contatta alcun servizio esterno: si limita ad accreditare l'importo sul saldo del Driver e a registrarne il movimento.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{mockups/fundWallet.PNG}
+    \caption{Ricarica del portafoglio.}
+    \label{fig:gui_fund_wallet}
+\end{figure}
+
+\subsubsection{Storico delle ricariche}
+Elenca le sessioni concluse del Driver, con data, energia erogata e costo. Da qui è possibile valutare \emph{a posteriori} una ricarica, nel caso in cui il Driver abbia saltato la finestra di valutazione mostrata al termine della sessione.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{mockups/chargingHistory.PNG}
+    \caption{Storico delle ricariche del Driver.}
+    \label{fig:gui_charging_history}
+\end{figure}
+
+\subsubsection{Profilo e abbonamento}
+Mostra i dati del profilo e permette di cambiare il piano di abbonamento (BASIC, PLUS, PREMIUM), che determina lo sconto applicato alla quota di tariffa trattenuta dalla piattaforma. Il passaggio a un piano superiore addebita la sola differenza di canone rispetto al piano corrente, mentre i passaggi a un piano inferiore sono bloccati.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{mockups/accountSubscription.PNG}
+    \caption{Profilo utente e gestione dell'abbonamento.}
+    \label{fig:gui_account}
+\end{figure}
+
+\subsection{Area Station Operator}
+
+\subsubsection{Menu dell'Operatore}
+Contenitore della dashboard dell'operatore, da cui si accede alla gestione delle proprie colonnine e ai rendiconti economici.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{mockups/operatorMenu.PNG}
+    \caption{Menu dello Station Operator.}
+    \label{fig:gui_operator_menu}
+\end{figure}
+
+\subsubsection{Gestione delle colonnine}
+Elenca le colonnine possedute dall'operatore con il loro stato operativo corrente (attiva, occupata, in sovraccarico, in attesa di approvazione, rifiutata), e dà accesso rapido alla registrazione di una nuova colonnina.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{mockups/stationHub.PNG}
+    \caption{Gestione delle colonnine dell'operatore.}
+    \label{fig:gui_station_hub}
+\end{figure}
+
+\subsubsection{Registrazione di una nuova colonnina}
+Il modulo raccoglie i parametri della nuova colonnina: nome, indirizzo, quartiere, potenza, tipo di connettore e tariffa dell'operatore. Il sistema rifiuta i parametri fisicamente incoerenti, per esempio una potenza superiore al limite del connettore scelto. La colonnina appena registrata \textbf{non entra subito in rete}: nasce in stato \texttt{PENDING\_VERIFICATION} e resta in attesa dell'approvazione dell'Energy Manager.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{mockups/newStation.PNG}
+    \caption{Registrazione di una nuova colonnina.}
+    \label{fig:gui_new_station}
+\end{figure}
+
+\subsubsection{Rendiconti economici}
+Riepiloga i guadagni maturati dall'operatore, l'energia venduta e il numero di sessioni erogate dalle sue colonnine. I valori non sono precalcolati né scritti a mano nell'interfaccia: sono ricavati dalle stesse query che alimentano il resto del sistema, e vengono riletti dal database all'apertura della schermata, perché il guadagno cambia a ogni sessione conclusa da un Driver.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{mockups/financials.PNG}
+    \caption{Rendiconti economici dell'operatore.}
+    \label{fig:gui_financials}
+\end{figure}
+
+\subsection{Area Energy Manager}
+
+\subsubsection{Menu dell'Energy Manager}
+Contenitore della dashboard del Manager, da cui si accede alle tre schermate di supervisione della rete: la coda di approvazione, la gestione delle segnalazioni di qualità e la dashboard di affidabilità.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{mockups/managerMenu.PNG}
+    \caption{Menu dell'Energy Manager.}
+    \label{fig:gui_manager_menu}
+\end{figure}
+
+\subsubsection{Coda di approvazione}
+Raccoglie le colonnine in attesa di verifica registrate dagli operatori. Il Manager può approvarle o rifiutarle. Approvare non è un semplice assenso: al momento dell'approvazione viene richiesta la \textbf{quota di tariffa della piattaforma} in euro per kWh, che da quel momento entra nel calcolo del costo di ogni ricarica su quella colonnina.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{mockups/approvalQueue.PNG}
+    \caption{Coda di approvazione delle nuove colonnine.}
+    \label{fig:gui_approval_queue}
+\end{figure}
+
+\subsubsection{Segnalazioni di qualità}
+Elenca gli alert generati automaticamente dal sistema quando una colonnina accumula valutazioni troppo basse. Il Manager può sospendere la colonnina oppure archiviare la segnalazione come falso allarme, motivando in entrambi i casi la decisione (si veda il caso d'uso in Tab.~\ref{tab:uc_rating_alert}).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{mockups/ratingAlerts.PNG}
+    \caption{Gestione delle segnalazioni di qualità.}
+    \label{fig:gui_rating_alerts}
+\end{figure}
+
+\subsubsection{Dashboard di affidabilità della rete}
+Mostra, per ciascun trasformatore, il carico e la temperatura correnti, con evidenza visiva di un eventuale allarme termico. È una schermata di sola osservazione: la protezione della rete in caso di surriscaldamento non è un'azione manuale del Manager, ma una reazione automatica del sistema.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{mockups/reliabilityDashboard.PNG}
+    \caption{Dashboard di affidabilità della rete elettrica.}
+    \label{fig:gui_reliability_dashboard}
+\end{figure}
 
 \section{Page Navigation Diagram}
 Il diagramma di navigazione illustra in che modo le diverse schermate dell'applicazione sono collegate tra loro. Mostra il percorso che l'utente compie muovendosi all'interno del sistema in base alle scelte effettuate o ai pulsanti premuti.
@@ -50,15 +229,12 @@ Passando all'architettura interna, il codice è organizzato in \textbf{quattro l
     \item \textbf{domain} — le entità: \texttt{ChargingStation}, \texttt{ChargingSession}, \texttt{Driver}, \texttt{PowerTransformer} e le altre. Non sono contenitori di dati passivi, ma oggetti \emph{ricchi}, che sanno fare ciò che riguarda la loro natura: è la \texttt{ChargingStation} stessa a sapere come si calcola il prezzo di una ricarica, ed è la \texttt{ChargingSession} stessa a sapere a quali condizioni può essere aperta.
 \end{itemize}
 
-% TODO: esportare docs/package-diagram.puml in Relazione_SWE/images/package_diagram.png
-% e poi DECOMMENTARE il blocco qui sotto. Il testo che segue fa riferimento a questa figura.
-%
-% \begin{figure}[H]
-%     \centering
-%     \includegraphics[width=0.85\textwidth]{package_diagram.png}
-%     \caption{Diagramma dei package: verso \texttt{domain} entrano frecce da tutti i livelli, ma da esso non ne esce nessuna.}
-%     \label{fig:package_diagram}
-% \end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{package_diagram.png}
+    \caption{Diagramma dei package: verso \texttt{domain} entrano frecce da tutti i livelli, ma da esso non ne esce nessuna.}
+    \label{fig:package_diagram}
+\end{figure}
 
 \subsection*{La regola d'oro: il dominio non dipende da nulla}
 

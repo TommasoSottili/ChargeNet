@@ -51,8 +51,6 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Solo per i test dei DAO: H2 in MODE=PostgreSQL esegue lo stesso scheme.sql
-             della produzione. La produzione gira su PostgreSQL: scope test. -->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
