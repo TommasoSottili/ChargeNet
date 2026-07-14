@@ -1,38 +1,54 @@
-\begin{table}[htbp]
-\centering
-\renewcommand{\arraystretch}{1.4}
-\begin{tabularx}{\textwidth}{| >{\bfseries}l | X |}
+\begin{xltabular}{\textwidth}{| >{\bfseries}l | X |}
+
+% --- INTESTAZIONE PRIMA PAGINA ---
+\caption{Caso d'Uso: Prenotazione a Breve Termine} \label{tab:uc_prenotazione} \\
 \hline
 \rowcolor{gray!15} Campo & \textbf{Contenuto} \\ \hline
-Nome & Prenotazione a Breve Termine (Short-Term Hold) \\ \hline
-Livello & Obiettivo Utente (User Goal) \\ \hline
-Descrizione & Il Conducente prenota temporaneamente una stazione di ricarica \texttt{ACTIVE} per 15 minuti per assicurarne la disponibilità al suo arrivo fisico. \\ \hline
-Pre-condizioni & 
-\begin{itemize}[leftmargin=*, nosep]
-    \item Il Conducente ha effettuato l'accesso.
-    \item Il Conducente non ha già un'altra prenotazione attiva.
-    \item La stazione di destinazione è \texttt{ACTIVE} ed è compatibile con il connettore del Conducente.
-\end{itemize} \\ \hline
-Post-condizioni & Lo stato della stazione viene modificato in \texttt{RESERVED}, \texttt{reserved\_by\_id} viene impostato sul Conducente e \texttt{expiration\_timestamp} viene impostato all'orario attuale più 15 minuti. La stazione prenotata rimane visibile al Conducente che ha effettuato la prenotazione (contrassegnata come \texttt{RESERVED}) e viene nascosta a tutti gli altri Conducenti. \\ \hline
+\endfirsthead
+
+% --- INTESTAZIONE PAGINE SUCCESSIVE ---
+\multicolumn{2}{c}{{\tablename\ \thetable{} -- Continua dalla pagina precedente}} \\
+\hline
+\rowcolor{gray!15} Campo & \textbf{Contenuto} \\ \hline
+\endhead
+
+% --- PIÈ DI PAGINA (se si spezza) ---
+\hline
+\multicolumn{2}{r}{\textit{Continua nella pagina successiva...}} \\
+\endfoot
+
+% --- PIÈ DI PAGINA FINALE ---
+\endlastfoot
+
+% --- CONTENUTO ---
+Nome & Prenotazione a Breve Termine \\ \hline
+Livello & Obiettivo Utente \\ \hline
+Descrizione & Il Conducente riserva per 15 minuti una colonnina \texttt{ACTIVE}, per assicurarsene la disponibilità al proprio arrivo. \\ \hline
+Pre-condizioni & \parbox[t]{\linewidth}{%
+Il Conducente ha effettuato l'accesso.\\
+Non ha già un'altra prenotazione attiva.\\
+La colonnina scelta è \texttt{ACTIVE} ed è compatibile con il connettore del veicolo.
+} \\ \hline
+Post-condizioni & La colonnina è in stato \texttt{RESERVED}, il campo \texttt{reserved\_by\_id} punta al Conducente e \texttt{expiration\_timestamp} è impostato a 15 minuti dall'istante corrente. La colonnina resta visibile al solo Conducente che l'ha prenotata. \\ \hline
 Attori & Conducente \\ \hline
 Unit Test & \texttt{StationServiceTest} \\ \hline
-Flusso Principale & 
+Flusso Principale &
 \begin{enumerate}[leftmargin=*, nosep]
-    \item Il Conducente seleziona una stazione \texttt{ACTIVE} dalla lista delle stazioni disponibili.
-    \item Il Conducente preme Smart Book per confermare la prenotazione.
-    \item Il sistema verifica che la stazione sia ancora \texttt{ACTIVE} (controllo di concorrenza).
-    \item Il sistema imposta lo stato della stazione su \texttt{RESERVED} e \texttt{reserved\_by\_id} sul Conducente.
-    \item Il sistema imposta \texttt{expiration\_timestamp} all'orario attuale più 15 minuti.
-    \item Il sistema mostra un messaggio di successo; la stazione appare ora come \texttt{RESERVED} nella lista del Conducente, offrendo solo l'opzione Charge Now.
+    \item Il Conducente seleziona una colonnina \texttt{ACTIVE} dall'elenco di quelle disponibili.
+    \item Conferma di volerla prenotare.
+    \item Il sistema tenta l'acquisizione con un \texttt{UPDATE} condizionale, che modifica la riga solo se la colonnina risulta ancora \texttt{ACTIVE}.
+    \item Il sistema porta la colonnina a \texttt{RESERVED} e ne registra il Conducente come titolare.
+    \item Il sistema imposta \texttt{expiration\_timestamp} a 15 minuti dall'istante corrente.
+    \item Il sistema conferma la prenotazione mostrando l'orario esatto di scadenza.
 \end{enumerate} \\ \hline
-Flussi Alternativi & 
-\textbf{3. Stazione non disponibile (Conflitto di concorrenza):} \newline
-3.1. Se la stazione è stata prenotata o occupata da un altro utente nel frattempo, il sistema nega la prenotazione. \newline
-3.2. Il sistema mostra il messaggio: "Stazione non più disponibile". \newline
-3.3. Ritorno al passo 1. \newline\newline
-\textbf{Nota sulla Scadenza:} \newline
-\textbullet\ Se trascorrono i 15 minuti senza che il Conducente avvii una sessione, il Grid Monitor ripristina automaticamente la stazione su \texttt{ACTIVE} (gestito dal caso d'uso Expire Short-Term Holds). \\ \hline
-\end{tabularx}
-\caption{Caso d'Uso: Prenotazione a Breve Termine}
-\label{tab:uc_prenotazione}
-\end{table}
+Flussi Alternativi &
+\textbf{3. Colonnina non più disponibile:} \newline
+3.1. Se nel frattempo un altro Conducente l'ha prenotata o occupata, l'\texttt{UPDATE} non aggiorna alcuna riga e il sistema nega la prenotazione. \newline
+3.2. La transazione viene annullata con un \texttt{rollback} e l'oggetto in memoria non viene modificato, così che memoria e database non divergano. \newline
+3.3. Il sistema mostra il messaggio \textit{"La colonnina non è più disponibile"} e si torna al passo 1. \newline\newline
+\textbf{Nota sulla concorrenza:} \newline
+\textbullet\ È il database stesso a impedire la doppia prenotazione: la condizione sullo stato \texttt{ACTIVE} è parte dell'\texttt{UPDATE}, quindi fra due Conducenti simultanei ne può vincere uno solo, senza alcun blocco applicativo. \newline\newline
+\textbf{Nota sulla scadenza:} \newline
+\textbullet\ Se i 15 minuti trascorrono senza che venga avviata una sessione, il \texttt{GridMonitor} riporta la colonnina ad \texttt{ACTIVE} (Tab.~\ref{tab:uc_update_state}). \\ \hline
+
+\end{xltabular}

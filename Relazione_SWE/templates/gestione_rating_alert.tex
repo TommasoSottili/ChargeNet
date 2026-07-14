@@ -21,42 +21,42 @@
 \endlastfoot
 
 % --- CONTENUTO ---
-Nome & Gestione di un Alert di Qualità (Manage Rating Alert) \\ \hline
-Livello & Obiettivo Utente (User Goal) \\ \hline
-Descrizione & L'Energy Manager esamina una segnalazione generata automaticamente dal sistema su una colonnina la cui qualità percepita è degradata, e decide se sospenderla oppure archiviare la segnalazione come falso allarme. \\ \hline
+Nome & Gestione di un Alert di Qualità \\ \hline
+Livello & Obiettivo Utente \\ \hline
+Descrizione & L'Energy Manager esamina una segnalazione aperta automaticamente dal sistema su una colonnina la cui qualità percepita è degradata, e decide se sospenderla oppure archiviare la segnalazione. \\ \hline
 Pre-condizioni & \parbox[t]{\linewidth}{%
 L'Energy Manager ha effettuato l'accesso.\\
-Esiste almeno un \texttt{RatingAlert} in stato \texttt{PENDING}. L'alert non nasce da una singola recensione negativa: è il \texttt{RatingService} a generarlo, dopo il salvataggio di un nuovo voto, quando la media della colonnina scende \textbf{sotto 2.0 con almeno 5 valutazioni}. Per una stessa colonnina non può esistere più di un alert aperto contemporaneamente.
+Esiste almeno un \texttt{RatingAlert} in stato \texttt{PENDING}. La segnalazione non nasce da una singola recensione negativa: è aperta dal \texttt{RatingService} quando la media della colonnina scende sotto 2.0 con almeno 5 valutazioni. Per una stessa colonnina non può esistere più di una segnalazione aperta.
 } \\ \hline
-Post-condizioni & L'alert esaminato passa a \texttt{RESOLVED\_SUSPENDED} oppure a \texttt{RESOLVED\_IGNORED}, con la nota del Manager registrata. Solo nel primo caso la colonnina passa allo stato \texttt{SUSPENDED}; archiviando la segnalazione, invece, lo stato della colonnina resta invariato. \\ \hline
+Post-condizioni & La segnalazione passa a \texttt{RESOLVED\_SUSPENDED} oppure a \texttt{RESOLVED\_IGNORED}, con la nota del Manager registrata. Solo nel primo caso la colonnina passa a \texttt{SUSPENDED}; archiviando, il suo stato resta invariato. \\ \hline
 Attori & Energy Manager \\ \hline
 Unit Test & \texttt{RatingServiceTest} \\ \hline
 Flusso Principale &
 \begin{enumerate}[leftmargin=*, nosep]
-    \item L'Energy Manager apre la schermata di gestione degli incidenti di rating dal proprio menu.
-    \item Il sistema mostra l'elenco dei soli alert in stato \texttt{PENDING}. Per ciascuno sono riportati il nome della colonnina, la media attuale delle valutazioni, un indicatore di gravità e da quanto tempo la segnalazione è aperta.
-    \item L'Energy Manager seleziona un alert e sceglie una delle due azioni possibili:
+    \item L'Energy Manager apre la schermata di gestione delle segnalazioni di qualità.
+    \item Il sistema mostra le sole segnalazioni in stato \texttt{PENDING}, con nome della colonnina, media attuale delle valutazioni, indicatore di gravità e tempo trascorso dall'apertura.
+    \item L'Energy Manager seleziona una segnalazione e sceglie una delle due azioni possibili:
     \begin{itemize}[leftmargin=*, nosep]
-        \item \textbf{Archivia la segnalazione (Dismiss Alert):}
+        \item \textbf{Archivia la segnalazione:}
         \begin{itemize}[leftmargin=*, nosep]
-            \item[4a.] L'Energy Manager preme DISMISS ALERT.
-            \item[5a.] Il sistema chiede una nota di motivazione, obbligatoria.
-            \item[6a.] Alla conferma, il sistema porta l'alert a \texttt{RESOLVED\_IGNORED} e ne registra la nota. Lo stato della colonnina non viene toccato. La segnalazione scompare dalla coda.
+            \item[4a.] Inserisce una nota di motivazione, obbligatoria, e conferma.
+            \item[5a.] Il sistema porta la segnalazione a \texttt{RESOLVED\_IGNORED} e ne registra la nota. Lo stato della colonnina non viene toccato.
         \end{itemize}
-        \item \textbf{Sospendi la colonnina (Suspend Station, \texttt{<<extend>>}):}
+        \item \textbf{Sospendi la colonnina (\texttt{<<extend>>}):}
         \begin{itemize}[leftmargin=*, nosep]
-            \item[4b.] L'Energy Manager preme SUSPEND STATION.
-            \item[5b.] Il sistema chiede una nota di motivazione, obbligatoria.
-            \item[6b.] Alla conferma, il sistema porta l'alert a \texttt{RESOLVED\_SUSPENDED} e la colonnina a \texttt{SUSPENDED}, nella stessa transazione. La segnalazione scompare dalla coda.
+            \item[4b.] Inserisce la motivazione della sospensione, obbligatoria, e conferma.
+            \item[5b.] Il sistema porta la segnalazione a \texttt{RESOLVED\_SUSPENDED} e la colonnina a \texttt{SUSPENDED}, in un'unica transazione.
         \end{itemize}
     \end{itemize}
+    \item La segnalazione scompare dalla coda di quelle aperte.
 \end{enumerate} \\ \hline
 Flussi Alternativi &
+\textbf{2. Segnalazione già gestita:} \newline
+2.1. Se nel frattempo la segnalazione non è più in stato \texttt{PENDING}, ad esempio perché chiusa da un altro Manager, il sistema rifiuta l'operazione. \newline
+2.2. La decisione non spetta al servizio ma all'entità di dominio: \texttt{RatingAlert} applica la risoluzione solo se la segnalazione è ancora \texttt{PENDING}, quindi una già chiusa non può essere risolta una seconda volta. \newline\newline
 \textbf{4. Annullamento:} \newline
-4.1. Se il Manager chiude il dialogo o lascia la nota vuota, l'operazione viene abbandonata e nessuna modifica viene salvata. \newline\newline
+4.1. Se il Manager chiude il dialogo o lascia vuota la nota, l'operazione viene abbandonata e nessuna modifica viene salvata. \newline\newline
 \textbf{Nota sull'atomicità:} \newline
-\textbullet\ Nella sospensione, l'aggiornamento dell'alert e quello della colonnina appartengono a un'unica transazione: se una delle due scritture fallisce, il \texttt{rollback} annulla anche l'altra, evitando una colonnina sospesa con l'alert ancora aperto (o viceversa). \newline\newline
-\textbf{Nota sulla transizione di stato:} \newline
-\textbullet\ La decisione se la transizione sia lecita non spetta al servizio ma all'entità di dominio: \texttt{RatingAlert} applica la risoluzione solo se la segnalazione è ancora in stato \texttt{PENDING}, quindi un alert già chiuso non può essere risolto una seconda volta. \\ \hline
+\textbullet\ Nella sospensione, l'aggiornamento della segnalazione e quello della colonnina appartengono a un'unica transazione: se una delle due scritture fallisce, il \texttt{rollback} annulla anche l'altra, evitando una colonnina sospesa con la segnalazione ancora aperta, o viceversa. \\ \hline
 
 \end{xltabular}
