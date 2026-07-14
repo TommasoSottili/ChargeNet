@@ -4,8 +4,8 @@ Questo capitolo descrive le scelte implementative e l'architettura interna di Ch
 
 \paragraph*{Architettura del Sistema:}
 
-I livelli principali sono tre: Domain, Business e Controller.
-L'interazione con il database PostgreSQL è gestita tramite il pattern Data Access Object (DAO), che nasconde la complessità delle query SQL al resto dell'applicazione. 
+I livelli principali sono quattro: Domain, Business, Controller e Data Access Object (DAO).
+L'interazione con il database PostgreSQL è gestita tramite il DAO, che nasconde la complessità delle query SQL al resto dell'applicazione. 
 
 \section{Domain Model}
  \label{sec: Domain Model}
@@ -14,14 +14,15 @@ Per avere maggiore ordine, il Domain Model è stato suddiviso in cinque pacchett
 
 I cinque pacchetti principali sono:
 \begin{itemize}
-    \item \textbf{Utenti:} Definisce gli attori del sistema. Ci sono tre profili principali (\textit{Driver}, \textit{StationOperator} ed \textit{EnergyManager}), che estendono tutti una classe madre comune per semplificare le operazioni di login e registrazione.
-    \item \textbf{Infrastrutture:} Rappresenta le parti fisiche della rete. Contiene le colonnine (\textit{ChargingStation}) e i trasformatori (\textit{PowerTransformer}), e serve a gestire parametri come la potenza massima erogabile o lo stato di occupazione.
-    \item \textbf{Sessioni:} È il collegamento pratico tra l'utente e l'infrastruttura. La classe centrale è \textit{ChargingSession}, che si occupa di far partire la ricarica e di calcolare quanti kWh vengono consumati col passare del tempo.
-    \item \textbf{Finanze:} Si occupa dei pagamenti e del saldo degli utenti. Gestisce le ricevute (\textit{Transaction}) create dopo una ricarica, un rimborso o il pagamento di un abbonamento, facendo in modo che lo storico contabile non possa essere modificato per sbaglio.
-    \item \textbf{Feedback:} Gestisce le recensioni. Raccoglie i voti (\textit{Rating}) lasciati dai guidatori e fa scattare in automatico un avviso di manutenzione (\textit{RatingAlert}) se la media di una stazione si abbassa troppo.
+    \item \textbf{Users:} Qui sono definiti gli attori del sistema. Ci sono tre profili principali (\textit{Driver}, \textit{StationOperator} ed \textit{EnergyManager}), che estendono tutti una classe astratta comune per semplificare le operazioni di login e registrazione.
+    \item \textbf{Infrastructures:} Rappresenta le parti fisiche della rete. Contiene le colonnine (\textit{ChargingStation}) e i trasformatori (\textit{PowerTransformer}), e serve a gestire parametri come la potenza massima erogabile o lo stato di occupazione.
+    \item \textbf{Sessions:} E' la parte che collega l'utente con l'infrastruttura. La classe centrale è \textit{ChargingSession}, che si occupa di far partire la ricarica e di calcolare quanti kWh vengono consumati col passare del tempo.
+    \item \textbf{Financials:} Si occupa dei pagamenti e del saldo degli utenti, gestendo le ricevute (\textit{Transaction}) create dopo una ricarica, un rimborso o il pagamento di un abbonamento e facendo in modo che lo storico contabile non possa essere modificato per sbaglio.
+    \item \textbf{Feedback:} La parte dedicata alle  recensioni. Vengono raccolti i voti (\textit{Rating}) lasciati dai guidatori e fa scattare in automatico un avviso di manutenzione (\textit{RatingAlert}) se la media di una stazione si abbassa troppo.
 \end{itemize}
 
 Nei prossimi paragrafi vedremo più nel dettaglio alcune delle soluzioni implementative che abbiamo adottato in questi cinque moduli.
+
 \subsection{Users}
 \label{subsec:utenti}
 Questo modulo definisce le identità degli attori tramite un'architettura basata sull'ereditarietà. Dalla classe astratta \texttt{User} derivano i tre profili specifici (\texttt{Driver}, \texttt{StationOperator} ed \texttt{EnergyManager}), ognuno con i propri attributi.
@@ -66,10 +67,12 @@ public BigDecimal updatePlan(SubscriptionPlan newPlan) {
 \end{minipage}
 \vspace{0.3cm}
 
-Per il collegamento con il database, invece di passare per i costruttori standard (che farebbero scattare validazioni inutili in fase di caricamento), abbiamo dotato ogni entità di un metodo \texttt{reconstitute()}, pensato esclusivamente per ripristinare in memoria i dati letti da PostgreSQL.
+In realtà anche se nel messaggio di eccezione  si parla di un downgrade vietato "durante il periodo attivo", nel modello non esiste nessun periodo di abbonamento: non ci sono né una data di inizio né una scadenza, il Driver ha semplicemente un \texttt{SubscriptionPlan} corrente. Il blocco del downgrade è quindi una regola assoluta, ovvero non si scende mai di piano. Non è legata a un vincolo temporale come il messaggio potrebbe lasciare intendere.
+
+Per il collegamento con il database, invece di passare per i costruttori standard, che farebbero scattare validazioni inutili in fase di caricamento, abbiamo dotato ogni entità di un metodo \texttt{reconstitute()}, pensato esclusivamente per ripristinare in memoria i dati letti da PostgreSQL.
 
 \subsection{Infrastructures}
-L'obiettivo di questo pacchetto è tradurre in codice i limiti fisici del mondo reale. Per la classe \texttt{ChargingStation} era necessario impedire la creazione di oggetti con parametri incoerenti o pericolosi.
+L'obiettivo di questo pacchetto è ottenere con il codice i limiti fisici del mondo reale. Per la classe \texttt{ChargingStation} era necessario impedire la creazione di oggetti con parametri incoerenti o pericolosi.
 
 Abbiamo quindi nascosto i costruttori, obbligando il resto del sistema a passare per il Factory Method \texttt{register()}. In questa fase la stazione esegue quattro controlli in sequenza: coordinate geografiche valide, potenza compresa tra 7 e 350 kW, potenza compatibile col limite fisico del connettore, e tariffa dell'operatore positiva. Basta che uno fallisca per bloccare subito la creazione.
 
@@ -103,12 +106,34 @@ public static ChargingStation register(StationOperator operator, PowerTransforme
 \end{minipage}
 \vspace{0.3cm}
 
-L'altro parte fodnamentale del pacchetto è il \texttt{PowerTransformer}, che fa da base per il sistema di Load Balancing. Piuttosto che avere un servizio esterno che controlla continuamente i trasformatori, abbiamo reso il trasformatore intelligente applicando il pattern Observer. A ogni ciclo di simulazione, ricalcola la sua temperatura interna; se supera la soglia critica dei 90 gradi, genera autonomamente un \texttt{THERMAL\_ALERT} per avvisare la rete, senza bisogno di sapere chi o come gestirà effettivamente l'emergenza (si veda il paragrafo~\ref{sec: Observer Pattern}).
+Nella stessa classe è presente anche il metodo per il calcolo del prezzo di una ricarica, \texttt{priceFor(kwh, driver)}. La tariffa è a due componenti: \texttt{tariffOperator}, fissata dall'operatore alla registrazione, e \texttt{tariffPlatform}, fissata dall'Energy Manager al momento dell'approvazione (paragrafo~\ref{subsec:validazione}). Il metodo somma le due quote per ottenere la tariffa al kWh, ma applica lo sconto legato all'abbonamento del Driver solo sulla quota della piattaforma:
+
+\vspace{0.3cm}
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[language=Java, caption={Calcolo del prezzo: lo sconto tocca solo la quota piattaforma}]
+public BigDecimal priceFor(double kwh, Driver driver) {
+    BigDecimal discount = (driver != null && driver.getSubscriptionPlan() != null)
+            ? BigDecimal.valueOf(driver.getSubscriptionPlan().getDiscount())
+            : BigDecimal.ZERO;
+
+    BigDecimal platformAfterDiscount = tariffPlatform.multiply(BigDecimal.ONE.subtract(discount));
+    BigDecimal ratePerKwh = tariffOperator.add(platformAfterDiscount);
+
+    return ratePerKwh.multiply(BigDecimal.valueOf(kwh))
+            .setScale(2, java.math.RoundingMode.HALF_UP);
+}
+\end{lstlisting}
+\end{minipage}
+\vspace{0.3cm}
+
+In questo modo un piano con sconto riduce ciò che il Driver paga alla piattaforma, ma non tocca il guadagno dell'operatore, che resta invariato qualunque sia il piano del Driver. È ovviamente necessario perché l'abbonamento viene sottoscritto con la piattaforma, non con l'operatore. \texttt{priceFor()} è lo stesso metodo richiamato sia da \texttt{ChargingSession.open()}, per calcolare il saldo minimo richiesto all'apertura di una sessione (paragrafo successivo), sia dalla \texttt{ChargingStrategy} in uso per addebitare ogni tick di ricarica (paragrafo~\ref{subsec:sessionservice}), in questo modo i due punti non possono mai calcolare cifre diverse.
+
+L'altra parte fondamentale del pacchetto è il \texttt{PowerTransformer}, che fa da base per il sistema di Load Balancing. Piuttosto che avere un servizio esterno che controlla continuamente i trasformatori, abbiamo reso il trasformatore intelligente applicando il pattern Observer. A ogni ciclo di simulazione, ricalcola la sua temperatura interna; se supera la soglia critica dei 90 gradi, genera autonomamente un \texttt{THERMAL\_ALERT} per avvisare la rete, senza bisogno di sapere chi o come gestirà effettivamente l'emergenza (vedi paragrafo~\ref{sec: Observer Pattern}).
 
 \subsection{Sessions}
-Il pacchetto racchiude la logica legata all'erogazione dell'energia. La classe centrale, \texttt{ChargingSession}, non si limita a registrare passivamente i dati (come kWh erogati e costi parziali), ma regola attivamente l'intero ciclo di vita dell'operazione, dalla creazione fino al completamento naturale o all'interruzione per emergenza termica.
+Il pacchetto racchiude la logica legata all'erogazione dell'energia. La classe centrale, \texttt{ChargingSession}, oltre che a registrare passivamente i dati, come kWh erogati e costi parziali, regola attivamente l'intero ciclo di vita dell'operazione, dalla creazione fino al termine della sessione, che sia andata buon fine o interrotta per surriscaldamento.
 
-Per garantire che una ricarica non inizi in condizioni non valide, l'istanziazione è affidata al metodo factory \texttt{open()}. Questo metodo esegue una serie di controlli incrociati di dominio: verifica la compatibilità fisica del connettore, controlla che la stazione non sia occupata e delega a ChargingStation.priceFor() il calcolo del saldo minimo richiesto, lo stesso metodo che userà poi la strategia di ricarica scelta, così il controllo d'ingresso e l'addebito reale non possono mai calcolare cifre diverse:
+Per garantire che una ricarica non inizi in condizioni non valide, l'istanziazione è affidata al metodo factory \texttt{open()}. Questo metodo esegue una serie di controlli di dominio: verifica la compatibilità fisica del connettore, controlla che la stazione non sia occupata e delega a \texttt{ChargingStation.priceFor()} il calcolo del saldo minimo richiesto per 5 kWh. Questa soglia ovviamente non stima il costo dell'intera sessione, cosa impossibile da prevedere in anticipo perché il Driver può interrompere la ricarica in qualsiasi momento, è solo un valore fisso, scelto per garantire che il Driver abbia credito sufficiente almeno per avviare la ricarica. È lo stesso metodo che userà poi la strategia di ricarica scelta, così il controllo d'ingresso e l'addebito reale non possono mai calcolare cifre diverse:
 
 \vspace{0.3cm}
 \noindent\begin{minipage}{\linewidth}
@@ -124,7 +149,7 @@ public static ChargingSession open(Driver driver, ChargingStation station, Charg
 
     if (!driver.hasSufficientBalance(minimumRequired)) {
         throw new InsufficientBalanceException("Credito insufficiente per avviare la sessione. E' richiesto un saldo di almeno " +
-                minimumRequired + "\\texteuro.");
+                minimumRequired + "€.");
     }
 
     return new ChargingSession(driver, station, strategy, batteryStart);
@@ -133,14 +158,14 @@ public static ChargingSession open(Driver driver, ChargingStation station, Charg
 \end{minipage}
 \vspace{0.5cm}
 
-Inoltre, la classe incapsula la logica di avanzamento tramite il metodo \texttt{addTick()}, che aggiorna in tempo reale i costi e l'energia immessa, facendo transitare automaticamente lo stato della sessione a completato qualora la batteria raggiunga il 100\% della sua capacità.
+Inoltre, la classe incapsula la logica di avanzamento tramite il metodo \texttt{addTick()}, che aggiorna in tempo reale i costi e l'energia trasferita, facendo passare automaticamente lo stato della sessione a completato qualora la batteria raggiunga il 100\% della sua capacità.
 
 \subsection{Financials}
-Questo modulo gestisce lo storico dei movimenti economici degli utenti, categorizzandoli tramite l'enumerazione \texttt{TransactionType} (ricariche, rimborsi, abbonamenti e depositi). 
+Qui vengono gestiti i movimenti economici degli utenti, suddividendoli tramite l'enumerazione \texttt{TransactionType} (ricariche, rimborsi, abbonamenti e depositi). 
 
-La scelta architetturale più rilevante per l'entità \texttt{Transaction} è stata quella di renderla immutabile. Trattandosi di dati contabili, uno storico non doveva poter essere alterato accidentalmente a runtime: per questo la classe è sprovvista di metodi \textit{setter} e i suoi campi sono valorizzabili unicamente al momento della creazione.
+ Per evitare che l'entità \texttt{Transaction} potesse essere modificata a runtime la classe è sprovvista di metodi \textit{setter} e i suoi campi sono valorizzabili unicamente al momento della creazione.
 
-Per blindare ulteriormente l'integrità del registro, la generazione di un nuovo movimento non avviene tramite un normale costruttore, ma è protetta da un metodo factory che scarta a priori qualsiasi operazione anomala, come ad esempio i pagamenti a importo zero o privi di causale:
+Inoltre la generazione di un nuovo movimento non avviene tramite un normale costruttore, ma è protetta da un metodo factory in modo da impedire qualsiasi operazione anomala, come ad esempio i pagamenti a importo zero o privi di causale:
 
 \vspace{0.3cm}
 \noindent\begin{minipage}{\linewidth}
@@ -160,7 +185,8 @@ public static Transaction create(Driver driver, TransactionType type, BigDecimal
 \end{minipage}
 \vspace{0.3cm}
 
-Questa scelta semplifica la logica del livello Business, che può contare su uno storico finanziario coerente.
+
+Questo controllo ha però una conseguenza negativa quando entra in gioco insieme a \texttt{Driver.updatePlan()} . Se un Driver infatti seleziona di nuovo il piano che ha già, \texttt{updatePlan()} calcola un \texttt{delta} pari a zero: non essendo negativo non lancia eccezioni, e il nuovo piano viene comunque assegnato in memoria. Il \texttt{WalletService} genera però sempre, dopo la chiamata, una \texttt{Transaction} di tipo \texttt{SUBSCRIPTION} con quell'importo, e con importo zero \texttt{Transaction.create()} solleva l'eccezione appena vista. Il rollback annulla la scrittura sul database, ma il \texttt{Driver} in memoria ha già il nuovo piano assegnato da \texttt{updatePlan()}: se quella stessa istanza restasse in uso dopo l'errore, mostrerebbe un piano diverso da quello realmente salvato. È un caso limite che il codice attuale non gestisce.
 
 \subsection{Feedback}
 A chiudere il Domain Model troviamo la parte dedicata alla qualità del servizio e al supporto. Qui abbiamo deciso di separare l'azione dell'utente (la recensione) dalla conseguente gestione amministrativa (l'allarme per la manutenzione).
@@ -566,7 +592,7 @@ Ogni schermata dell'applicazione ha un Controller associato, il cui compito è s
     \item \textbf{DriverMenuController:} Contenitore della dashboard Driver: gestisce il menu laterale e sostituisce solo il contenuto centrale ad ogni navigazione.
     \item \textbf{StationExplorerController:} Mostra le colonnine compatibili nelle vicinanze e permette di prenotarne una o avviare direttamente una sessione.
     \item \textbf{LiveSessionController:} Mostra l'avanzamento in tempo reale di una ricarica in corso. Non calcola nulla e non è un observer del \texttt{GridMonitor}: rilegge lo stato della sessione dal database una volta al secondo, tramite una \texttt{Timeline} JavaFX indipendente dal tick del monitor (si veda il paragrafo~\ref{subsec:polling}).
-    \item \textbf{ChargingHistoryController:}Elenca le sessioni passate del Driver, completate o interrotte per allarme termico.
+    \item \textbf{ChargingHistoryController:} Elenca le sessioni passate del Driver, completate o interrotte da thermal alert.
     \item \textbf{FundWalletController:} Gestisce la ricarica del saldo del wallet.
     \item \textbf{AccountController:} Mostra i dati del profilo: piano di abbonamento (modificabile), email e veicolo (in sola lettura).
 \end{itemize}
@@ -589,23 +615,20 @@ Ogni schermata dell'applicazione ha un Controller associato, il cui compito è s
     \item \textbf{ReliabilityDashboardController:} Stato in tempo reale della rete elettrica: carico e temperatura di ogni trasformatore, con evidenza visiva di eventuali allarmi termici.
 \end{itemize}
 
-\subsubsection{Come un Controller ottiene i suoi servizi: il Service Locator}
+\subsubsection{Service Locator}
 \label{subsec:servicelocator}
 
-C'è un vincolo tecnico da cui non si scappa: \textbf{i Controller non li istanziamo noi}. È JavaFX a costruirli, via reflection, mentre carica il file \texttt{.fxml} a cui sono associati. Questo esclude la tecnica che sarebbe la più pulita per fornire a un oggetto le sue dipendenze, cioè passargliele nel costruttore (\textit{dependency injection}): il costruttore non lo chiamiamo noi.
+I Controller non li istanziamo noi ma vengono direttamente costruiti mentre carica il file \texttt{.fxml} a cui sono associati. Questo esclude la tecnica che sarebbe la più pulita per fornire a un oggetto le sue dipendenze, cioè passargliele nel costruttore (\textit{dependency injection}): il costruttore non lo chiamiamo noi.
 
-La soluzione adottata è il pattern \textbf{Service Locator}. Quando un controller ha bisogno di un servizio non se lo fa passare, ma va a chiederlo a un punto centrale noto, il \texttt{NavigationManager}, che espone metodi come \texttt{getSessionService()}, \texttt{getStationService()} e \texttt{getCurrentUser()}. Il recupero avviene nel metodo \texttt{initialize()}, che JavaFX invoca subito dopo aver costruito il controller e iniettato i campi \texttt{@FXML}.
+La soluzione adottata è il pattern \textbf{Service Locator}. Quando un controller ha bisogno di un servizio non se lo fa passare, ma va a chiederlo a un punto centrale noto, il \texttt{NavigationManager}, che espone metodi come \texttt{getSessionService()}, \texttt{getStationService()} e \texttt{getCurrentUser()}. Il recupero avviene nel metodo \texttt{initialize()}, che JavaFX invoca subito dopo aver costruito il controller e inserito i campi \texttt{@FXML}.
 
-È bene notare la coerenza della scelta, perché è il punto in cui questo capitolo si collega direttamente al Capitolo~\ref{ch:testing}: i \emph{Controller} usano il Service Locator \emph{perché non siamo noi a istanziarli}, ma i \emph{Service} fra loro continuano a usare la classica dependency injection (ricevono la \texttt{DaoFactory} nel costruttore), perché i Service li creiamo noi, e passare le dipendenze dall'esterno è esattamente ciò che permette di sostituirle con dei mock e testarli in isolamento.
+In questo modo si garantisce che un Controller non parli mai direttamente al database ma debba sempre passare da un Service. Un pezzo di interfaccia che scavalca la logica di business per andare dritto a un DAO renderebbe impossibile far rispettare le regole validazioni, calcoli, transizioni di stato che nel DAO non esistono.
 
-Un principio che ne discende, tenuto fermo in tutto il progetto: \textbf{un Controller non parla mai direttamente al database}. Passa sempre da un Service. Un pezzo di interfaccia che scavalcasse la logica di business per andare dritto a un DAO renderebbe impossibile far rispettare le regole (validazioni, calcoli, transizioni di stato) che nel DAO non esistono.
+\subsubsection{Indipendenza della LiveSession dal GridMonitor}
 
-\subsubsection{Il polling della Live Session, indipendente dal GridMonitor}
-\label{subsec:polling}
+La schermata di ricarica in tempo reale (\texttt{LiveSessionController}) è quella in cui il rapporto fra interfaccia e simulazione si vede meglio, verrebbe da pensare che la schermata sia un observer del \texttt{GridMonitor}, notificata ad ogni tick.
 
-La schermata di ricarica in tempo reale (\texttt{LiveSessionController}) è quella in cui il rapporto fra interfaccia e simulazione si vede meglio, ed è anche quella che si presta al fraintendimento più naturale: verrebbe da pensare che la schermata sia un \emph{observer} del \texttt{GridMonitor}, notificata ad ogni tick. Non è così, e la distinzione è deliberata.
-
-La schermata \textbf{non calcola nulla e non riceve alcuna notifica}: possiede un proprio ciclo di aggiornamento, una \texttt{Timeline} JavaFX che una volta al secondo rilegge dal database lo stato della sessione e aggiorna i numeri a video.
+In realtà non è assolutamente così, la schermata non calcola nulla e non riceve alcuna notifica: possiede un proprio ciclo di aggiornamento, una \texttt{Timeline} JavaFX che una volta al secondo rilegge dal database lo stato della sessione e aggiorna i numeri a video.
 
 \vspace{0.3cm}
 \noindent\begin{minipage}{\linewidth}
@@ -618,9 +641,8 @@ pollTimeline.play();
 \end{minipage}
 \vspace{0.3cm}
 
-Il \texttt{GridMonitor} scrive ogni 5 secondi, la schermata legge ogni secondo, e i due cicli non comunicano mai direttamente: l'unico punto di sincronizzazione è il database, che resta la sola fonte di verità. Il vantaggio è concreto: \textbf{se il Driver chiude la schermata, la ricarica prosegue lo stesso}, esattamente come una colonnina reale continua a caricare anche quando non si guarda l'app sul telefono. Per rientrare, il menu del Driver mostra una scorciatoia "Resume" verso la sessione ancora in corso. Se la schermata fosse stata un observer del motore di simulazione, chiuderla avrebbe significato staccare l'ascoltatore, e sarebbe stato molto più facile scrivere per sbaglio un'interfaccia che, chiudendosi, ferma la simulazione.
+Il \texttt{GridMonitor} scrive ogni 5 secondi, la schermata legge ogni secondo, e i due cicli non comunicano mai direttamente: l'unico punto di sincronizzazione è il database. In questo modo il vantaggio è che se il Driver chiude la schermata, la ricarica prosegue lo stesso, esattamente come una colonnina reale continua a caricare anche quando non si guarda l'app sul telefono. Per rientrare, il menu del Driver mostra una scorciatoia "Resume" verso la sessione ancora in corso. Se la schermata fosse stata un observer del motore del GridMonitor, chiuderla avrebbe significato staccare l'ascoltatore, e sarebbe stato molto più facile scrivere per sbaglio un'interfaccia che chiudendosi fermasse la simulazione.
 
-C'è infine un accorgimento tecnico che questa scelta ha reso necessario. Quando la ricarica termina, la schermata deve capire \emph{perché}: conclusione normale (batteria carica o stop volontario) oppure interruzione d'autorità per surriscaldamento, caso in cui va mostrata una finestra di emergenza. Il problema è che JavaFX non consente di aprire una finestra modale mentre è in esecuzione un'animazione, e una \texttt{Timeline} è a tutti gli effetti un'animazione. La comparsa del messaggio è quindi stata rinviata al ciclo di eventi immediatamente successivo, impacchettandola in \texttt{Platform.runLater(...)}. È un punto che si presta a un equivoco che conviene prevenire: qui \texttt{runLater} serve \emph{esclusivamente} a rimandare il dialogo fuori dal ciclo della \texttt{Timeline}, \textbf{non} a spostare l'aggiornamento da un thread di background al thread grafico, perché la \texttt{Timeline} gira già sul thread di JavaFX.
 
 \subsubsection{Il dato sempre aggiornato}
 
@@ -639,12 +661,12 @@ BigDecimal revenue = loggedOperator.getTotalEarnings() != null
 \end{minipage}
 \vspace{0.3cm}
 
-L'oggetto \texttt{User} tenuto in sessione contiene una \emph{fotografia} dei dati dell'utente al momento del login. Alcuni di quei dati cambiano però mentre l'utente naviga: il saldo del Driver scende ad ogni tick di ricarica, i guadagni dell'operatore salgono ad ogni sessione chiusa. Una schermata che mostrasse il valore in memoria mostrerebbe un numero vecchio. La regola, applicata a tutte le schermate che espongono valori mutevoli, è che l'identità e il ruolo si leggono dalla sessione, mentre qualunque valore soggetto a variazione si rilegge dal Service competente ogni volta che la schermata viene aperta. Questa convenzione evita un'intera categoria di bug, quelli in cui l'utente vede numeri non aggiornati.
+L'oggetto \texttt{User} tenuto in sessione contiene l'informazione dei dati dell'utente al momento del login. Alcuni di quei dati cambiano però mentre l'utente naviga: il saldo del Driver scende ad ogni tick di ricarica, i guadagni dell'operatore salgono ad ogni sessione chiusa. Una schermata che mostrasse il valore in memoria mostrerebbe un numero vecchio. La regola, applicata a tutte le schermate che espongono valori che cambiano, è che l'identità e il ruolo si leggano dalla sessione, mentre qualunque valore soggetto a variazione si rilegge dal Service competente ogni volta che la schermata viene aperta. Così si evita un'intera categoria di bug, cioè quelli in cui l'utente vede numeri non aggiornati.
 
 \section{Persistenza: il livello DAO e il mapping oggetti/tabelle}
 \label{sec:dao}
 
-Il livello DAO si occupa di tradurre le righe delle tabelle SQL in oggetti Java e viceversa. È bene chiarire subito la terminologia, perché il problema che questo livello risolve, il disallineamento fra il modello a oggetti e quello relazionale, è lo stesso che affrontano gli ORM (\textit{Object-Relational Mapper}) come Hibernate: la differenza è che qui \textbf{non è stato usato alcun ORM}. Il mapping è scritto a mano, riga per riga, con query SQL esplicite e \texttt{PreparedStatement}. È una scelta didattica deliberata: costringe a vedere esattamente cosa accade fra un oggetto Java e una riga di tabella, invece di delegarlo a una libreria che lo nasconde.
+Il livello DAO si occupa di tradurre le righe delle tabelle SQL in oggetti Java e viceversa. Il problema che questo livello risolve, il disallineamento fra il modello a oggetti e quello relazionale, è lo stesso che affrontano gli ORM (\textit{Object-Relational Mapper}) come Hibernate, la differenza però è che qui non è stato usato alcun ORM. infatti il mapping è scritto a mano, riga per riga, con query SQL esplicite e \texttt{PreparedStatement}. In questo modo abbiamo dovuto vedere esattamente cosa accade fra un oggetto Java e una riga di tabella, invece di delegarlo a una libreria che lo nasconde.
 
 Il \texttt{GenericDao<T>} definisce le operazioni base che garantiscono la persistenza dei dati:
 
@@ -666,7 +688,7 @@ Ogni entità del dominio ha poi una classe concreta (es. \texttt{PostgresUserDao
 
 \subsubsection{Tabella \texttt{users}}
 
-La tabella \texttt{users} contiene sia i Driver che gli Station Operator che gli Energy Manager, distinti da una colonna \texttt{role}. Il mapping deve quindi decidere, riga per riga, quale sottoclasse istanziare:
+La tabella \texttt{users} contiene sia i Driver che gli Station Operator che gli Energy Manager, distinti da una colonna \texttt{role}. Il mapping deve quindi decidere quale sottoclasse istanziare:
 
 \vspace{0.3cm}
 \noindent\begin{minipage}{\linewidth}
@@ -708,7 +730,7 @@ Colonne come \texttt{wallet\_balance} o \texttt{total\_earnings} esistono nella 
 
 \subsubsection{Metodo \texttt{reconstitute()}}
 
-Il mapping non chiama mai \texttt{new Driver(...)} direttamente, ma un metodo chiamato \texttt{reconstitute()}. La differenza è importante: quando un Driver viene creato per la prima volta (in fase di registrazione) deve passare da un Factory Method che valida i dati in ingresso, perché in quel momento i dati arrivano da un utente e potrebbero essere sbagliati. Quando invece un Driver viene riletto dal database, i dati sono già stati validati in passato (e protetti da vincoli SQL come i \texttt{CHECK} dello schema) — rivalidarli ad ogni lettura sarebbe inutile. \texttt{reconstitute()} si limita quindi a ricostruire l'oggetto così com'è, senza ripetere controlli già superati.
+Il mapping non chiama mai il costruttore del Driver direttamente, ma un metodo chiamato \texttt{reconstitute()}. La differenza è importante: quando un Driver viene creato per la prima volta, in fase di registrazione, deve passare da un Factory Method che valida i dati in ingresso, perché in quel momento i dati arrivano da un utente e potrebbero essere sbagliati. Quando invece un Driver viene riletto dal database, i dati sono già stati validati in passato (e protetti da vincoli SQL come i \texttt{CHECK} dello schema) — rivalidarli ad ogni lettura sarebbe inutile. \texttt{reconstitute()} si limita quindi a ricostruire l'oggetto così com'è, senza ripetere controlli già superati.
 
 \subsubsection{Ricostruzione parziale (stub)}
 
@@ -726,7 +748,7 @@ return RatingAlert.reconstitute(alertId, station, avgAtCreation, status, manager
 \end{minipage}
 \vspace{0.3cm}
 
-Questa \texttt{ChargingStation} è un oggetto reale (uno "stub"), di cui vengono valorizzati solo i campi necessari, mentre il resto resta \texttt{null}. In questo modo si evita una query aggiuntiva per recuperare dati che non verrebbero comunque mostrati; se però in futuro venisse ripassato a un metodo che si aspetta una colonnina completa (ad esempio per un aggiornamento), andrebbe prima ricaricato per intero.
+Questa \texttt{ChargingStation} è un oggetto reale detto stub, di cui vengono valorizzati solo i campi necessari, mentre gli altri restano \texttt{null}. In questo modo si evita una query aggiuntiva per recuperare dati che non verrebbero comunque mostrati; se però in futuro venisse ripassato a un metodo che si aspetta una colonnina completa, ad esempio per un aggiornamento, andrebbe prima ricaricato per intero.
 
 \subsubsection{I vincoli dello schema}
 
