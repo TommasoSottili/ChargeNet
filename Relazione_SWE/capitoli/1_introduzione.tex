@@ -44,4 +44,5 @@ geocoding.
 \item La distanza tra due punti è calcolata con formula euclidea, più che sufficiente all'unico scopo di ordinare le colonnine per vicinanza.
 \item Non esiste un sistema di pagamento verso l'esterno: ricariche del portafoglio e guadagni sono movimenti interni.
 \item I coefficienti di calore dei trasformatori sono tarati per rendere il surriscaldamento osservabile in un tempo breve. Nella realtà un trasformatore si surriscalda per l'effetto cumulativo di molte ricariche contemporanee sullo stesso ramo; nella nostra applicazione, pensata per un solo utente alla volta, non è possibile simulare più sessioni in parallelo per raggiungere lo stesso effetto. Per questo motivo il calore generato da una singola sessione è stato aumentato, così da poter osservare l'intero meccanismo (accumulo, soglia, notifica, reazione) anche con una sola ricarica attiva, senza alterarne la logica.
+\item Il Driver una volta che ha un piano di abbonamento non può passare ad un altro di prezzo inferiore, non abbiamo implementato la scadenza temporale perchè non strettamente necessaria al funzionamento della demo.
 \end{itemize}
