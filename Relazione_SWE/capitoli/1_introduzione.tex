@@ -2,16 +2,16 @@
 
 
 \section{Descrizione}
-Il progetto \textbf{ChargeNet} è un sistema software pensato per la gestione di una rete di stazioni di ricarica per veicoli elettrici (EV). L'idea alla base dell'applicazione è quella di coordinare tutto ciò che ruota attorno a una sessione di ricarica: dall'aiutare l'utente a trovare una colonnina libera, fino alla gestione del pagamento, assicurandosi allo stesso tempo che l'infrastruttura elettrica non subisca danni.
+Il progetto \textbf{ChargeNet} è un sistema software pensato per la gestione di una rete di stazioni di ricarica per veicoli elettrici (EV). L'obiettivo è coordinare l'intera sessione di ricarica: dalla ricerca di una colonnina libera, alla gestione del pagamento, fino alla tutela dell'infrastruttura elettrica da eventuali danni.
 
-Per raggiungere questo obiettivo, la piattaforma fa da punto di incontro per tre specifiche figure, fornendo a ciascuna le funzionalità necessarie:
+La piattaforma è pensata per tre figure, ciascuna con le proprie funzionalità:
 
 \begin{itemize}
     \item \textbf{Driver:} È l'utente finale. Utilizza il sistema per cercare le stazioni compatibili con la sua auto, far partire e monitorare la ricarica, e gestire i pagamenti tramite un portafoglio virtuale interno (wallet).
     
-    \item \textbf{Station Operator:} È il proprietario delle colonnine. Registra nella piattaforma le nuove stazioni con i loro parametri tecnici (potenza, connettore, quartiere) e la tariffa che intende applicare, e ne segue l'andamento economico: guadagni maturati, energia venduta e numero di sessioni erogate. Non decide però da solo se una colonnina entra in rete: ogni nuova registrazione resta in attesa dell'approvazione dell'Energy Manager.
+    \item \textbf{Station Operator:} È il proprietario delle colonnine. Registra nella piattaforma le nuove stazioni con i loro parametri tecnici (potenza, connettore, quartiere) e la tariffa che intende applicare, e ne segue l'andamento economico: guadagni maturati, energia venduta e numero di sessioni erogate. Non può decidere però da solo se una colonnina entra in rete, infatti ogni nuova registrazione resta in attesa dell'approvazione dell'Energy Manager.
 
-    \item \textbf{Energy Manager:} È il supervisore della rete. Il suo ruolo è duplice. Da un lato \emph{autorizza}: approva o rifiuta le colonnine proposte dagli operatori e, approvandole, ne fissa la quota di tariffa trattenuta dalla piattaforma; interviene inoltre sulle colonnine segnalate per qualità scadente, sospendendole o archiviando la segnalazione. Dall'altro \emph{sorveglia}: una dashboard gli mostra in tempo reale carico e temperatura di ogni trasformatore. La protezione dell'infrastruttura in caso di surriscaldamento, però, non è una sua azione manuale: è il sistema stesso a reagire in autonomia interrompendo le ricariche sul ramo in sovraccarico (\textit{Load Balancing}, descritto nel paragrafo~\ref{sec: Observer Pattern}). L'Energy Manager osserva l'emergenza, non la governa premendo un pulsante.
+    \item \textbf{Energy Manager:} È il supervisore della rete e ha un doppio ruolo. Da un lato autorizza, vale a dire approva o rifiuta le colonnine proposte dagli operatori e, approvandole, ne fissa la quota di tariffa trattenuta dalla piattaforma; interviene inoltre sulle colonnine segnalate per qualità scadente, sospendendole o archiviando la segnalazione. Dall'altro ha il compito di supervisionare. Ha infatti una dashboard che gli mostra in tempo reale carico e temperatura di ogni trasformatore. La protezione dell'infrastruttura in caso di surriscaldamento non è però una sua azione manuale: è il sistema stesso a reagire in autonomia interrompendo le ricariche sul ramo in sovraccarico (\textit{Load Balancing}, descritto nel paragrafo~\ref{sec: Observer Pattern}).
 \end{itemize}
 
 \section{Stack Tecnologico}
@@ -31,10 +31,9 @@ Per raggiungere questo obiettivo, la piattaforma fa da punto di incontro per tre
 
  
 
-\section{Semplificazioni consapevoli}
-\label{sec:semplificazioni}
+\section{Semplificazioni adottate}
 
-Trattandosi di un progetto universitario e viste chiare limitazioni di risorse, sono state adottate delle semplificazioni, con le quali comunque si è cercato di replicare un sistema effettivamente pronto all'utilizzo nel mondo reale. Seguono alcune delle scelte più significative, che hanno permesso di ridurre la complessità senza compromettere la logica del sistema:
+Trattandosi di un progetto universitario, con tempo e risorse limitati, sono state adottate alcune semplificazioni, cercando comunque di restare vicini a un sistema realmente utilizzabile. Le scelte principali sono le seguenti:
 
 \begin{itemize}
 \item La geolocalizzazione non deriva da un

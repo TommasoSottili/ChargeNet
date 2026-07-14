@@ -1,9 +1,9 @@
 \chapter{Analisi dei Requisiti e Casi d'uso}
 
-Questo capitolo descrive il processo di progettazione del sistema, seguendo un approccio che va dall'esterno verso l'interno. Si parte dall'analisi di come gli utenti interagiscono con l'applicazione, definendo i requisiti e l'interfaccia grafica, per poi scendere progressivamente nei dettagli tecnici dell'architettura software e della struttura del database.
+Questo capitolo descrive il processo di progettazione del sistema seguendo un approccio che va dall'esterno verso l'interno, partendo da come gli utenti interagiscono con l'applicazione, definendo i requisiti e l'interfaccia grafica, per poi scendere nei dettagli tecnici dell'architettura software e della struttura del database.
 
 \section{Use Case Diagram}
-Il diagramma dei casi d'uso offre una visione d'insieme delle funzionalità del sistema. Serve a mappare visivamente quali azioni possono compiere i tre attori principali (Driver, Station Operator ed Energy Manager) all'interno della piattaforma.
+Il diagramma dei casi d'uso offre una visione d'insieme delle funzionalità del sistema, mostrando quali azioni possono compiere i tre attori principali (Driver, Station Operator ed Energy Manager) all'interno della piattaforma.
 
 \begin{figure}[H]
     \centering
@@ -13,7 +13,7 @@ Il diagramma dei casi d'uso offre una visione d'insieme delle funzionalità del 
 \end{figure}
 
 \section{Use Case Templates}
-Per evitare ambiguità, i casi d'uso più importanti sono stati documentati nel dettaglio attraverso dei template strutturati. Questi schemi descrivono passo dopo passo il flusso degli eventi, le precondizioni necessarie e i possibili scenari di errore.
+Per evitare ambiguità, i casi d'uso più importanti sono stati documentati con dei template strutturati, che descrivono passo dopo passo il flusso degli eventi, le precondizioni necessarie e i possibili scenari di errore.
 \begingroup
 \renewcommand{\arraystretch}{1.4}
 \input{templates/ricarica_veicolo.tex} 
@@ -208,7 +208,7 @@ Mostra, per ciascun trasformatore, il carico e la temperatura correnti, con evid
 \end{figure}
 
 \section{Page Navigation Diagram}
-Il diagramma di navigazione illustra in che modo le diverse schermate dell'applicazione sono collegate tra loro. Mostra il percorso che l'utente compie muovendosi all'interno del sistema in base alle scelte effettuate o ai pulsanti premuti.
+Il diagramma di navigazione illustra in che modo le diverse schermate dell'applicazione sono collegate tra loro, mostrando il percorso che l'utente compie muovendosi nel sistema in base alle scelte effettuate o ai pulsanti premuti.
 
 \begin{figure}[H]
     \centering
@@ -236,16 +236,16 @@ Passando all'architettura interna, il codice è organizzato in \textbf{quattro l
     \label{fig:package_diagram}
 \end{figure}
 
-\subsection*{La regola d'oro: il dominio non dipende da nulla}
+\subsection*{Il dominio non dipende dagli altri livelli}
 
-Il vincolo che ha guidato l'intera architettura si enuncia in una riga: \textbf{nessuna classe del livello \texttt{domain} dipende da un altro livello}. Le entità non sanno che esistono servizi, controller o database. Nel diagramma questo si legge a colpo d'occhio: verso il package \texttt{domain} entrano frecce da tutti gli altri livelli, ma da esso non ne esce nessuna. È una proprietà verificabile meccanicamente, non un'intenzione: nell'intero package \texttt{domain} non compare un solo \texttt{import} di \texttt{business}, \texttt{dao} o \texttt{presentation}.
+Nella progettazione dell'architettura è stato rispettato il principio per cui nessuna classe del livello \texttt{domain} possa dipendere da un altro livello. Le entità non sanno che esistono servizi, controller o database, e nel diagramma questo si può leggere subito: verso il package \texttt{domain} entrano frecce da tutti gli altri livelli, ma da esso non ne esce nessuna. Non è solo un'intenzione, ma una proprietà verificabile: nell'intero package \texttt{domain} non compare un solo \texttt{import} di \texttt{business}, \texttt{dao} o \texttt{presentation}.
 
-La regola ha avuto conseguenze concrete, non decorative. Un esempio: il calcolo del prezzo base di una ricarica è stato messo sulla \texttt{ChargingStation} (dominio puro) e non sull'interfaccia delle strategie (che vive nel business), proprio perché così \emph{sia} il dominio \emph{sia} il business possono usarlo senza che il dominio debba "guardare verso l'alto". La scelta opposta avrebbe reso il cuore stabile del sistema dipendente da uno strato più esterno e più volatile.
+Il rispetto di tale principio ha avuto conseguenze concrete. Per esempio il calcolo del prezzo base di una ricarica è stato messo sulla \texttt{ChargingStation} (dominio puro) e non sull'interfaccia delle strategie, che si trova nel business, proprio perché così sia il dominio che il business possono usarlo senza che il dominio debba rivolgersi esternamente. La scelta opposta lo avrebbe reso dipendente da uno strato più esterno e più volatile.
 
-Il beneficio si è visto in modo tangibile nella migrazione da H2 a PostgreSQL: entità, servizi e controller sono rimasti \emph{intatti}, perché nessuno di loro sapeva quale database ci fosse sotto. Le uniche cose toccate sono state la configurazione della connessione e il bootstrap del database. Un'architettura a livelli si giudica esattamente così: non da quanto è bella sulla carta, ma da quanto codice bisogna riscrivere quando cambia qualcosa in fondo alla pila.
+Il beneficio si è visto in modo tangibile nella migrazione da H2 a PostgreSQL, dove entità, servizi e controller sono rimasti intatti perché nessuno di loro sapeva quale database ci fosse sotto: le uniche cose toccate sono state la configurazione della connessione e il bootstrap del database. 
 
 \section{Class Diagram}
-Il sistema è stato progettato con un'architettura a strati per mantenere alta coesione e basso accoppiamento (\textit{high coesion and low coupling}). Nel seguente paragrafo sono approfondite le classi principali:
+Il sistema è stato progettato con un'architettura a strati, per mantenere alta coesione e basso accoppiamento (\textit{high cohesion and low coupling}). Nei paragrafi seguenti sono approfondite le classi principali di ciascun livello.
 
 \subsection{Domain Model}
 
@@ -260,7 +260,7 @@ Questo diagramma rappresenta il Domain Model, cioè le entità principali su cui
 
 \subsection{Business Layer}
 
-Il seguente diagramma mostra il Business Layer, il livello che contiene la logica applicativa del sistema. Qui si trovano i servizi che coordinano le entità del Domain Model, le strategie di ricarica e i componenti che gestiscono la simulazione della rete. Il livello è approfondito nel paragrafo \ref{sec: Business}.
+Il Business Layer è il livello che contiene la logica applicativa del sistema, dove si trovano i servizi che coordinano le entità del Domain Model, le strategie di ricarica e i componenti che gestiscono la simulazione della rete. Il livello è approfondito nel paragrafo \ref{sec: Business}.
 
 \begin{figure}[H]
     \centering
@@ -271,7 +271,7 @@ Il seguente diagramma mostra il Business Layer, il livello che contiene la logic
 
 \subsection{DAO}
 
-Di seguito è mostrato il diagramma del livello DAO, responsabile della comunicazione con il database. Il suo compito è tradurre le entità del Domain Model in dati salvabili e recuperabili, garantendone quindi la persistenza
+Il livello DAO si occupa della comunicazione con il database, traducendo le entità del Domain Model in dati salvabili e recuperabili e garantendone la persistenza.
 
 \begin{figure}[H]
     \centering
@@ -293,7 +293,7 @@ Il seguente diagramma rappresenta il presentation layer, cioè l'interfaccia gra
 
 \section{Sequence Diagram}
 
-Nel seguente paragrafo sono mostrati i diagrammi di sequenza di alcuni dei flussi più significativi del sistema, che descrivono come le varie classi interagiscono tra loro nel tempo per portare a termine un'operazione.
+I diagrammi di sequenza che seguono descrivono alcuni dei flussi più significativi del sistema, mostrando come le varie classi interagiscono tra loro nel tempo per portare a termine un'operazione.
 
 \subsection{Ciclo di vita del GridMonitor
 }
@@ -304,7 +304,7 @@ Nel seguente paragrafo sono mostrati i diagrammi di sequenza di alcuni dei fluss
     \label{fig:seq_gridmonitor}
 \end{figure}
 
-Il \texttt{GridMonitor} (Fig.~\ref{fig:seq_gridmonitor}) è il thread daemon che scandisce l'intera simulazione della rete elettrica con un tick fisso di 5 secondi, ed è di fatto l'unico componente attivo di propria iniziativa nel sistema: tutti gli altri servizi vengono invocati su richiesta. Ad ogni ciclo il monitor libera prima le prenotazioni scadute tramite \texttt{StationService.expireHolds()}, poi recupera da \texttt{SessionService} l'elenco delle sessioni attive e, per ciascuna, seleziona la \texttt{ChargingStrategy} corrispondente per calcolare kWh erogati e costo del tick, aggiornando in un'unica transazione sia il wallet del Driver sia lo stato della sessione. Lo stesso tick genera un incremento di calore che viene accumulato per trasformatore e applicato a fine ciclo a ciascun \texttt{PowerTransformer}: se la temperatura supera i 90°C viene notificato l'evento \texttt{THERMAL\_ALERT} agli observer registrati, dando origine al flusso descritto in Fig.~\ref{fig:seq_thermal_alert}. Infine il monitor invoca il controllo di qualità del \texttt{RatingService}. È importante osservare che la UI non partecipa a questo ciclo come observer: lo stato delle sessioni viene mostrato tramite un polling separato sul database, in modo tale che i due flussi restino disaccoppiati e l'unico punto di sincronizzazione sia la persistenza.
+Il \texttt{GridMonitor} (Fig.~\ref{fig:seq_gridmonitor}) è il thread daemon che scandisce l'intera simulazione della rete elettrica con un tick fisso di 5 secondi, ed è l'unico componente attivo di propria iniziativa nel sistema: tutti gli altri servizi vengono invocati su richiesta. Ad ogni ciclo il monitor libera prima le prenotazioni scadute tramite \texttt{StationService.expireHolds()}, poi recupera da \texttt{SessionService} l'elenco delle sessioni attive e, per ciascuna, seleziona la \texttt{ChargingStrategy} corrispondente per calcolare kWh erogati e costo del tick, aggiornando in un'unica transazione sia il wallet del Driver sia lo stato della sessione. Lo stesso tick genera un incremento di calore che viene accumulato per trasformatore e applicato a fine ciclo a ciascun \texttt{PowerTransformer}: se la temperatura supera i 90°C viene notificato l'evento \texttt{THERMAL\_ALERT} agli observer registrati, dando origine al flusso descritto in Fig.~\ref{fig:seq_thermal_alert}. Infine il monitor invoca il controllo di qualità del \texttt{RatingService}. La UI non partecipa a questo ciclo come observer: lo stato delle sessioni viene mostrato tramite un polling separato sul database, in questo i due flussi restano disaccoppiati e l'unico punto di sincronizzazione è la persistenza.
 
 \subsection{Approvazione di una colonnina}
 
@@ -315,7 +315,7 @@ Il \texttt{GridMonitor} (Fig.~\ref{fig:seq_gridmonitor}) è il thread daemon che
     \label{fig:seq_station_approval}
 \end{figure}
 
-Il flusso di approvazione (Fig.~\ref{fig:seq_station_approval}) regola l'ingresso in esercizio di una nuova colonnina proposta da uno Station Operator. L'Energy Manager apre la coda delle richieste in stato \texttt{PENDING\_VERIFICATION}, popolata da \texttt{StationService.getPendingStations()}, e per ciascuna voce può approvare o rifiutare. In caso di approvazione il controller richiede la tariffa di piattaforma da applicare in €/kWh e delega la transizione alla \texttt{ValidationService}, che apre esplicitamente una connessione con \texttt{setAutoCommit(false)} prima di invocare \texttt{activate()} sul dominio: è la \texttt{ChargingStation} stessa a validare che la transizione sia legittima solo a partire da \texttt{PENDING\_VERIFICATION}, sollevando un'eccezione altrimenti, mentre il servizio si occupa unicamente di orchestrare la persistenza e il commit o il rollback della transazione in caso di errore. La stessa separazione si ritrova nel percorso di rifiuto, dove il dominio applica la transizione a \texttt{REJECTED} dopo l'acquisizione della motivazione da parte del Manager. In entrambi i casi la responsabilità di stabilire se un cambio di stato è ammesso resta interamente nel Domain Model , mentre il Business Layer si limita a decidere quando invocarla e a garantirne l'atomicità della persistenza.
+Il flusso di approvazione (Fig.~\ref{fig:seq_station_approval}) regola l'ingresso in esercizio di una nuova colonnina proposta da uno Station Operator. L'Energy Manager apre la coda delle richieste in stato \texttt{PENDING\_VERIFICATION}, occupata da \texttt{StationService.getPendingStations()}, e per ciascuna richiesta può approvare o rifiutare. In caso di approvazione il controller richiede la tariffa di piattaforma da applicare in €/kWh e delega la transizione alla \texttt{ValidationService}, che apre una connessione con \texttt{setAutoCommit(false)} prima di invocare \texttt{activate()} sul dominio: è la \texttt{ChargingStation} stessa a validare che la transizione sia legittima solo a partire da \texttt{PENDING\_VERIFICATION}, sollevando un'eccezione altrimenti, mentre il servizio si occupa unicamente di gestire la persistenza e il commit o il rollback della transazione in caso di errore. La stessa separazione si ritrova nel percorso di rifiuto, dove il dominio applica la transizione a \texttt{REJECTED} dopo che il Manager ha fornito una motivazione. In entrambi i casi la responsabilità di stabilire se un cambio di stato è ammesso resta interamente nel Domain Model, mentre il Business Layer si limita a decidere quando invocarla e a garantirne l'atomicità della persistenza.
 
 \subsection{Gestione dell'evento di temperatura troppo alta (Thermal Alert)}
 \begin{figure}[H]
@@ -331,11 +331,11 @@ A quel punto il \texttt{LoadBalancerService} interviene in due passaggi separati
 
 \section{Database}
 
-La gestione dei dati di ChargeNet è affidata a un database relazionale PostgreSQL. In fase di sviluppo si è però lavorato con \textbf{H2}, un database che può girare interamente in memoria: non richiede installazione, si avvia e si spegne con l'applicazione ed è velocissimo. Questo ha permesso di scrivere query e provare l'applicazione fin dal primo giorno, rimandando l'installazione e la configurazione del database reale.
+La gestione dei dati di ChargeNet è affidata a un database relazionale PostgreSQL. In fase di sviluppo si è però lavorato con \textbf{H2}, un database che può girare interamente in memoria, che ci è tornato comodo in quanto non richiede installazione e si avvia e si spegne con l'applicazione. Questo ha permesso di scrivere query e provare l'applicazione da subito, rimandando l'installazione e la configurazione del database reale.
 
-L'accortezza che ha reso possibile il passaggio è stata usare H2 fin dall'inizio in modalità \texttt{MODE=PostgreSQL}, e scrivere lo schema con tipi e sintassi standard di Postgres (\texttt{BIGSERIAL} per le chiavi auto-incrementanti, \texttt{DECIMAL}, \texttt{TIMESTAMP}, \texttt{BOOLEAN}). Il risultato è che \textbf{nessuna query dei DAO è stata riscritta} e nessun Service o Controller si è accorto del cambiamento: è la dimostrazione più concreta del valore della regola d'oro enunciata nel paragrafo~\ref{sec:package}.
+Per poter fare poi il passaggio abbiamo dovuto usare H2 fin dall'inizio in modalità \texttt{MODE=PostgreSQL}, e scrivere lo schema con tipi e sintassi standard di Postgres (\texttt{BIGSERIAL} per le chiavi auto-incrementanti, \texttt{DECIMAL}, \texttt{TIMESTAMP}, \texttt{BOOLEAN}). In questo modo non abbiamo dovuto riscrivere nessuna query dei DAO e nessun Service o Controller si è accorto del cambiamento. E' una dimostrazione concreta dell' indipendenza del dominio descritta nel paragrafo~\ref{sec:package}.
 
-Sarebbe però disonesto presentare la migrazione come un semplice cambio di stringa di connessione: il lavoro reale è stato di natura diversa, e riguarda il fatto che un database \emph{persistente} pone problemi che un database in memoria non pone. Con H2 in memoria, ogni avvio ripartiva da zero e lo schema poteva essere ricreato ogni volta da capo; con PostgreSQL i dati \textbf{sopravvivono} fra un avvio e l'altro, e un bootstrap distruttivo avrebbe cancellato tutto ad ogni riapertura. Il bootstrap è stato quindi reso \textbf{idempotente}: le istruzioni \texttt{DROP TABLE} sono state eliminate in favore di \texttt{CREATE TABLE IF NOT EXISTS}, e soprattutto il \emph{seed} dei dati iniziali viene eseguito solo se il database risulta vuoto, con un controllo esplicito che conta le righe della tabella \texttt{users}.
+ Un'ltra operazione necessaria per la migrazione èstata rendere il bootstrap \textbf{idempotente}: le istruzioni \texttt{DROP TABLE} sono state eliminate in favore di \texttt{CREATE TABLE IF NOT EXISTS}, e soprattutto il \emph{seed} dei dati iniziali viene eseguito solo se il database risulta vuoto, con un controllo esplicito che conta le righe della tabella \texttt{users}.
 
 \vspace{0.3cm}
 \noindent\begin{minipage}{\linewidth}
@@ -350,18 +350,18 @@ if (isDatabaseEmpty(conn)) {
 \end{minipage}
 \vspace{0.3cm}
 
-Un secondo avvio ritrova quindi gli stessi dati invece di duplicarli o azzerarli, che è precisamente la prova che la persistenza funziona. È anche la lezione più utile imparata sul campo, perché il problema si è presentato prima in forma di bug: in una versione iniziale lo schema veniva rieseguito ad \emph{ogni} connessione e, siccome il file iniziava cancellando le tabelle, ogni operazione di fatto azzerava il database. La registrazione di un utente funzionava, ma al login successivo l'utente era già sparito. Averlo trasformato in un'inizializzazione unica ha risolto il problema alla radice, e ha insegnato a distinguere con precisione \emph{ciò che va fatto una volta sola} da \emph{ciò che va fatto sempre}.
+Un secondo avvio ritrova quindi gli stessi dati invece di duplicarli o azzerarli, che è precisamente la prova che la persistenza funziona. 
 
 \subsection{Schema ER}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.95\textwidth]{ChargeNet_ER.drawio.pdf}
+    \includegraphics[width=0.95\textwidth]{ChargeNet_schemaER.drawio.pdf}
     \caption{Schema Entità-Relazione del database ChargeNet.}
     \label{fig:er_chargenet}
 \end{figure}
 
-Lo schema (Fig.~\ref{fig:er_chargenet}) riflette la stessa gerarchia già introdotta nel Domain Model: \texttt{Users} è un'entità generica che rappresenta ciò che ogni utente ha in comune (identità, credenziali, ruolo), che viene specializzata in tre sottotipi,\textbf{Driver}, \textbf{StationOperator} ed \textbf{EnergyManager}, ciascuno con i propri attributi specifici. Un utente appartiene esattamente a uno dei tre sottotipi, mai a più di uno contemporaneamente, infatti la colonna \texttt{role} può avere un solo valore.
+Lo schema (Fig.~\ref{fig:er_chargenet}) mostra la stessa gerarchia già introdotta nel Domain Model: \texttt{Users} è un'entità generica che rappresenta ciò che ogni utente ha in comune (identità, credenziali, ruolo), e viene specializzata in tre sottotipi, \textbf{Driver}, \textbf{StationOperator} ed \textbf{EnergyManager}, ciascuno con i propri attributi specifici. Un utente appartiene esattamente a uno dei tre sottotipi, mai a più di uno contemporaneamente, perché la colonna \texttt{role} può avere un solo valore.
 
 Le relazioni principali partono dallo specifico sottotipo e non genericamente da \texttt{Users}:
 
@@ -376,7 +376,7 @@ Le relazioni principali partono dallo specifico sottotipo e non genericamente da
 
 \subsection{Modello Relazionale}
 
-La traduzione delle entità semplici segue le regole standard: ogni entità diventa una tabella, ogni relazione (1,n) diventa una chiave esterna sul lato "molti". La generalizzazione invece è stata tradotta nel seguente modo: un'unica tabella con tutte le colonne di tutti i sottotipi, dove le colonne che non riguardano una riga restano \texttt{NULL}, e una colonna discriminatore indica il sottotipo reale. 
+La traduzione delle entità semplici segue le regole standard: ogni entità diventa una tabella, ogni relazione (1,n) diventa una chiave esterna sul lato "molti". La generalizzazione è stata invece tradotta con un'unica tabella che raccoglie tutte le colonne di tutti i sottotipi, dove le colonne che non riguardano una riga restano \texttt{NULL} e una colonna discriminatore indica il sottotipo reale.
 
 \begin{quote}
 \ttfamily
@@ -428,17 +428,17 @@ session\_id \ \ si riferisce a \ \ ChargingSessions(id)
     \item[] \textsc{unique}(\dots) \ — \ Vincolo di unicità su una combinazione di più colonne.
 \end{itemize}
 
-La colonna \texttt{role} in \texttt{Users} dice se la riga rappresenta un Driver, uno StationOperator o un EnergyManager. Colonne come \texttt{wallet\_balance} (Driver) o \texttt{total\_earnings} (StationOperator) esistono per tutte le righe della tabella, ma restano \texttt{NULL} per i sottotipi a cui non appartengono. Per esempio ovviamente non ha senso che \texttt{EnergyManager} abbia un valore diverso da \texttt{null} nell'attributo \texttt{subscription\_plan}. È lo stesso meccanismo descritto nel paragrafo~\ref{sec:dao} a proposito del metodo \texttt{extractUserFromResultSet()}, che legge la colonna \texttt{role} e ricostruisce l'oggetto Java del sottotipo corretto.
+La colonna \texttt{role} in \texttt{Users} dice se la riga rappresenta un Driver, uno StationOperator o un EnergyManager. Colonne come \texttt{wallet\_balance} (Driver) o \texttt{total\_earnings} (StationOperator) esistono per tutte le righe della tabella, ma restano \texttt{NULL} per i sottotipi a cui non appartengono: per esempio non ha senso che \texttt{EnergyManager} abbia un valore diverso da \texttt{null} nell'attributo \texttt{subscription\_plan}. È lo stesso meccanismo descritto nel paragrafo~\ref{sec:dao} a proposito del metodo \texttt{extractUserFromResultSet()}, che legge la colonna \texttt{role} e ricostruisce l'oggetto Java del sottotipo corretto.
 
 
-Per quanto riguarda invece le due FK verso \texttt{Users} in \texttt{ChargingStations} (\texttt{operator\_id} e \texttt{reserved\_by\_id}) modellano due relazioni indipendenti — chi possiede la colonnina e chi la sta eventualmente prenotando, ed è proprio per questo che solo la seconda può essere nulla.
+Le due FK verso \texttt{Users} in \texttt{ChargingStations} (\texttt{operator\_id} e \texttt{reserved\_by\_id}) modellano invece due relazioni indipendenti — chi possiede la colonnina e chi la sta eventualmente prenotando — ed è per questo che solo la seconda può essere nulla.
 
-Il vincolo \texttt{UNIQUE (driver\_id, session\_id)} sulla tabella \texttt{Ratings} fa si che anche a livello di database valga la regola che un Driver può lasciare una sola valutazione per ciascuna sessione.
+Il vincolo \texttt{UNIQUE (driver\_id, session\_id)} sulla tabella \texttt{Ratings} fa sì che anche a livello di database valga la regola che un Driver può lasciare una sola valutazione per ciascuna sessione.
 
 Infine, diversi attributi numerici sono protetti da vincoli \texttt{CHECK} direttamente nello schema (es. \texttt{stars} tra 1 e 5, \texttt{wallet\_balance} sempre $\geq 0$): questi vincoli sono una seconda difesa rispetto alla validazione già presente nel Domain Model, indipendente da eventuali bug nel codice Java.
 
-E' presente un limite, conseguenza della generalizzazione utilizzata: la foreign key \texttt{operator\_id} garantisce solo che l'id referenziato esista in \texttt{Users}, non che quella riga appartenga effettivamente a uno StationOperator; lo stesso vale per \texttt{driver\_id} rispetto ai Driver. Questo vincolo di coerenza fra ruolo e utilizzo non è esprimibile a livello di schema relazionale standard.
+È presente un limite, conseguenza della generalizzazione utilizzata: la foreign key \texttt{operator\_id} garantisce solo che l'id referenziato esista in \texttt{Users}, non che quella riga appartenga effettivamente a uno StationOperator; lo stesso vale per \texttt{driver\_id} rispetto ai Driver. Questo vincolo di coerenza fra ruolo e utilizzo non è esprimibile a livello di schema relazionale standard.
 
-Nel percorso applicativo il buco è chiuso dal sistema di tipi di Java: \texttt{StationService.registerStation()} accetta come parametro uno \texttt{StationOperator}, non un generico \texttt{User}, e passargli un \texttt{Driver} non compilerebbe nemmeno. È bene però essere precisi sulla portata di questa garanzia, perché è più debole di quanto sembri: vale per il \emph{codice applicativo}, non per il database. Una \texttt{INSERT} scritta a mano, o uno script di popolamento iniziale, possono benissimo scrivere in \texttt{operator\_id} l'id di un Driver, e il database la accetterebbe senza obiezioni, perché quell'id in \texttt{Users} esiste davvero.
+Nell' applicativo il problema è comunque risolto dal sistema di tipi di Java, infatti \texttt{StationService.registerStation()} accetta come parametro uno \texttt{StationOperator}, non un generico \texttt{User}, e passargli un \texttt{Driver} non compilerebbe nemmeno. Quanto detto vale per il \emph{codice applicativo} ma non per il database. Una \texttt{INSERT} scritta a mano o uno script di popolamento iniziale, possono benissimo scrivere in \texttt{operator\_id} l'id di un Driver, e il database la accetterebbe subito, perché effettivamente quell'id in \texttt{Users} esiste davvero.
 
-Non è un'ipotesi teorica: è esattamente il punto da cui è passato un bug reale del seed, in cui alcune colonnine erano state attribuite per errore al driver invece che all'operatore, sballando poi le dashboard dei guadagni. La conclusione corretta è quindi che la coerenza fra ruolo e riferimento è garantita \emph{dal codice}, non \emph{dallo schema}: è una difesa forte finché tutte le scritture passano dai Service, e cade non appena qualcosa scrive nel database aggirandoli. Un'alternativa che l'avrebbe resa strutturale sarebbe stata tradurre la generalizzazione in tabelle separate per sottotipo, al prezzo però di join aggiuntive su ogni login: si è preferita la semplicità della tabella unica, accettando consapevolmente questo limite.
+Non è solo un'ipotesi teorica, ma è proprio in questo modo che è passato un bug reale del seed, infatti alcune colonnine erano state attribuite per errore al driver invece che all'operatore, alterandoo poi le dashboard dei guadagni. La conclusione corretta è quindi che la coerenza fra ruolo e riferimento è garantita \emph{dal codice}, non \emph{dallo schema}. E' efficace finché tutte le scritture passano dai Service, ma cade non appena qualcosa scrive nel database aggirandoli. Un'alternativa che avrebbe risolto il problema sarebbe stata tradurre la generalizzazione in tabelle separate per sottotipo, che però avrebbe comportato join aggiuntive su ogni login, motivo per cui si è preferita la semplicità della tabella unica, accettando consapevolmente questo limite.

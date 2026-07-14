@@ -10,9 +10,9 @@ L'interazione con il database PostgreSQL è gestita tramite il pattern Data Acce
 \section{Domain Model}
  \label{sec: Domain Model}
 
-Per avere maggiore ordine abbiamo suddiviso il Domain Model in cinque pacchetti principali, ognuno con una responsabilità specifica, raggruppando il codice in base alla finalità e al contesto di utilizzo. Questa struttura modulare facilita la manutenzione e l'estensione del sistema, permettendo di isolare le modifiche a specifici ambiti senza impattare l'intero progetto, oltre che a rendere più semplice la comprensione del codice per il lettore.
+Per avere maggiore ordine, il Domain Model è stato suddiviso in cinque pacchetti principali, ognuno con una responsabilità specifica, raggruppando il codice in base alla finalità e al contesto di utilizzo.
 
-Di seguito sono elencati i cinque pacchetti principali, con una breve descrizione delle loro responsabilità, che verranno approfondite nel proseguo del paragrafo:
+I cinque pacchetti principali sono:
 \begin{itemize}
     \item \textbf{Utenti:} Definisce gli attori del sistema. Ci sono tre profili principali (\textit{Driver}, \textit{StationOperator} ed \textit{EnergyManager}), che estendono tutti una classe madre comune per semplificare le operazioni di login e registrazione.
     \item \textbf{Infrastrutture:} Rappresenta le parti fisiche della rete. Contiene le colonnine (\textit{ChargingStation}) e i trasformatori (\textit{PowerTransformer}), e serve a gestire parametri come la potenza massima erogabile o lo stato di occupazione.
@@ -22,7 +22,7 @@ Di seguito sono elencati i cinque pacchetti principali, con una breve descrizion
 \end{itemize}
 
 Nei prossimi paragrafi vedremo più nel dettaglio alcune delle soluzioni implementative che abbiamo adottato in questi cinque moduli.
-\subsection{Utenti}
+\subsection{Users}
 \label{subsec:utenti}
 Questo modulo definisce le identità degli attori tramite un'architettura basata sull'ereditarietà. Dalla classe astratta \texttt{User} derivano i tre profili specifici (\texttt{Driver}, \texttt{StationOperator} ed \texttt{EnergyManager}), ognuno con i propri attributi.
 
@@ -68,8 +68,8 @@ public BigDecimal updatePlan(SubscriptionPlan newPlan) {
 
 Per il collegamento con il database, invece di passare per i costruttori standard (che farebbero scattare validazioni inutili in fase di caricamento), abbiamo dotato ogni entità di un metodo \texttt{reconstitute()}, pensato esclusivamente per ripristinare in memoria i dati letti da PostgreSQL.
 
-\subsection{Infrastrutture}
-L'obiettivo di questo pacchetto è tradurre in codice i limiti fisici del mondo reale. Per la classe \texttt{ChargingStation} era fondamentale impedire la creazione di oggetti con parametri incoerenti o pericolosi.
+\subsection{Infrastructures}
+L'obiettivo di questo pacchetto è tradurre in codice i limiti fisici del mondo reale. Per la classe \texttt{ChargingStation} era necessario impedire la creazione di oggetti con parametri incoerenti o pericolosi.
 
 Abbiamo quindi nascosto i costruttori, obbligando il resto del sistema a passare per il Factory Method \texttt{register()}. In questa fase la stazione esegue quattro controlli in sequenza: coordinate geografiche valide, potenza compresa tra 7 e 350 kW, potenza compatibile col limite fisico del connettore, e tariffa dell'operatore positiva. Basta che uno fallisca per bloccare subito la creazione.
 
@@ -103,9 +103,9 @@ public static ChargingStation register(StationOperator operator, PowerTransforme
 \end{minipage}
 \vspace{0.3cm}
 
-L'altro parte fodnamentale del pacchetto è il \texttt{PowerTransformer}, che fa da base per il sistema di Load Balancing. Piuttosto che avere un servizio esterno che controlla continuamente i trasformatori, abbiamo reso il trasformatore intelligente applicando il pattern Observer. A ogni ciclo di simulazione, ricalcola la sua temperatura interna; se supera la soglia critica dei 90 gradi, genera autonomamente un \texttt{THERMAL\_ALERT} per avvisare la rete, senza bisogno di sapere chi o come gestirà effettivamente l'emergenza(vedasi paragrafo~\ref{sec: Observer Pattern}).
+L'altro parte fodnamentale del pacchetto è il \texttt{PowerTransformer}, che fa da base per il sistema di Load Balancing. Piuttosto che avere un servizio esterno che controlla continuamente i trasformatori, abbiamo reso il trasformatore intelligente applicando il pattern Observer. A ogni ciclo di simulazione, ricalcola la sua temperatura interna; se supera la soglia critica dei 90 gradi, genera autonomamente un \texttt{THERMAL\_ALERT} per avvisare la rete, senza bisogno di sapere chi o come gestirà effettivamente l'emergenza (si veda il paragrafo~\ref{sec: Observer Pattern}).
 
-\subsection{Sessioni}
+\subsection{Sessions}
 Il pacchetto racchiude la logica legata all'erogazione dell'energia. La classe centrale, \texttt{ChargingSession}, non si limita a registrare passivamente i dati (come kWh erogati e costi parziali), ma regola attivamente l'intero ciclo di vita dell'operazione, dalla creazione fino al completamento naturale o all'interruzione per emergenza termica.
 
 Per garantire che una ricarica non inizi in condizioni non valide, l'istanziazione è affidata al metodo factory \texttt{open()}. Questo metodo esegue una serie di controlli incrociati di dominio: verifica la compatibilità fisica del connettore, controlla che la stazione non sia occupata e delega a ChargingStation.priceFor() il calcolo del saldo minimo richiesto, lo stesso metodo che userà poi la strategia di ricarica scelta, così il controllo d'ingresso e l'addebito reale non possono mai calcolare cifre diverse:
@@ -135,10 +135,10 @@ public static ChargingSession open(Driver driver, ChargingStation station, Charg
 
 Inoltre, la classe incapsula la logica di avanzamento tramite il metodo \texttt{addTick()}, che aggiorna in tempo reale i costi e l'energia immessa, facendo transitare automaticamente lo stato della sessione a completato qualora la batteria raggiunga il 100\% della sua capacità.
 
-\subsection{Finanze}
+\subsection{Financials}
 Questo modulo gestisce lo storico dei movimenti economici degli utenti, categorizzandoli tramite l'enumerazione \texttt{TransactionType} (ricariche, rimborsi, abbonamenti e depositi). 
 
-La scelta architetturale più rilevante per l'entità \texttt{Transaction} è stata quella di renderla intrinsecamente immutabile. Trattandosi di dati contabili, era fondamentale garantire che uno storico non potesse essere alterato accidentalmente a runtime. Per questo motivo, la classe è sprovvista di metodi \textit{setter} e i suoi campi sono valorizzabili unicamente al momento della creazione.
+La scelta architetturale più rilevante per l'entità \texttt{Transaction} è stata quella di renderla immutabile. Trattandosi di dati contabili, uno storico non doveva poter essere alterato accidentalmente a runtime: per questo la classe è sprovvista di metodi \textit{setter} e i suoi campi sono valorizzabili unicamente al momento della creazione.
 
 Per blindare ulteriormente l'integrità del registro, la generazione di un nuovo movimento non avviene tramite un normale costruttore, ma è protetta da un metodo factory che scarta a priori qualsiasi operazione anomala, come ad esempio i pagamenti a importo zero o privi di causale:
 
@@ -160,7 +160,7 @@ public static Transaction create(Driver driver, TransactionType type, BigDecimal
 \end{minipage}
 \vspace{0.3cm}
 
-Questa impostazione si è rivelata molto utile per semplificare la logica del livello Business, sapendo di poter fare affidamento su un tracciamento finanziario solido e privo di "transazioni fantasma".
+Questa scelta semplifica la logica del livello Business, che può contare su uno storico finanziario coerente.
 
 \subsection{Feedback}
 A chiudere il Domain Model troviamo la parte dedicata alla qualità del servizio e al supporto. Qui abbiamo deciso di separare l'azione dell'utente (la recensione) dalla conseguente gestione amministrativa (l'allarme per la manutenzione).
@@ -238,7 +238,7 @@ Oltre alla gestione della rete elettrica, questa classe espone anche i metodi di
 \subsection{GridMonitor}
  Non avendo a disposizione dei sensori fisici che inviano dati telemetrici, avevamo bisogno di un componente che facesse scorrere il tempo in modo autonomo, senza bloccare l'interfaccia grafica.
 
-Abbiamo quindi esteso la classe \texttt{Thread} di Java. Un dettaglio implementativo fondamentale è stato impostare questo thread come "Demone" all'interno del costruttore (\texttt{this.setDaemon(true);}). In questo modo, il ciclo vitale del monitor viene legato a quello dell'interfaccia JavaFX: se l'utente chiude la finestra dell'applicazione, il thread si arresta in modo pulito senza lasciare processi appesi in background.
+Abbiamo quindi esteso la classe \texttt{Thread} di Java, impostandola come "Demone" nel costruttore (\texttt{this.setDaemon(true);}). In questo modo il ciclo vitale del monitor viene legato a quello dell'interfaccia JavaFX: se l'utente chiude la finestra dell'applicazione, il thread si arresta in modo pulito senza lasciare processi appesi in background.
 
 Il ciclo di esecuzione principale si sveglia ogni 5 secondi e orchestra le operazioni dei vari servizi, aggregando i dati prima di applicarli:
 
@@ -262,7 +262,7 @@ private void onTick() {
 In particolare, la fase di elaborazione (\texttt{processActiveSessions}) calcola il calore generato dalle singole strategie di ricarica in uso (Fast o Eco) e lo somma all'interno di una \textit{Heat Map}, in modo da notificare i trasformatori una sola volta per ciclo, ottimizzando ulteriormente le prestazioni.
 
 \subsection{LoadBalancerService}
-Il \texttt{LoadBalancerService} è il componente che giustifica l'esistenza del pattern Observer all'interno dell'architettura. Invece di interrogare attivamente la rete per scovare eventuali surriscaldamenti, questo servizio si registra semplicemente in ascolto sui trasformatori. 
+Il \texttt{LoadBalancerService} è il componente per cui è necessaria l'esistenza del pattern Observer all'interno dell'architettura. Invece di interrogare attivamente la rete per trovare eventuali surriscaldamenti, questo servizio si registra semplicemente in ascolto sui trasformatori. 
 
 Quando riceve una notifica di \texttt{THERMAL\_ALERT}, il servizio reagisce isolando immediatamente il ramo di rete compromesso. L'intervento si divide in due fasi distinte, con garanzie transazionali deliberatamente diverse. Nella \textbf{prima fase} viene aperta un'unica transazione che porta a \texttt{OVERLOADED} tutte le colonnine collegate al trasformatore, impedendo l'avvio di nuove ricariche: o passano tutte, o non ne passa nessuna. Questa transazione viene poi \emph{chiusa prima} di passare alla seconda fase, e non per un problema di deadlock, ma per una ragione più semplice: la \textbf{seconda fase} delega la chiusura delle sessioni in corso al \texttt{SessionService}, che apre connessioni proprie: tenere aperta la connessione della prima fase mentre se ne aprono altre sulle stesse righe significherebbe contendere inutilmente i lock che quella transazione ha già acquisito. Chiuderla per tempo li rilascia.
 
@@ -297,7 +297,7 @@ private void handleThermalAlert(PowerTransformer transformer) {
 \end{minipage}
 \vspace{0.3cm}
 
-È importante notare che questa seconda fase non è atomica nel suo complesso: ogni chiusura forzata (\texttt{forceClose}) apre e chiude una propria transazione indipendente, invece di essere racchiusa in un'unica transazione che copra tutte le sessioni del ramo. È una scelta deliberata, non un limite del sistema: se il fallimento di un singolo rimborso facesse fallire anche gli altri già conclusi con successo, si penalizzerebbero driver che non hanno responsabilità in quel fallimento.
+Questa seconda fase non è atomica nel suo complesso: ogni chiusura forzata (\texttt{forceClose}) apre e chiude una propria transazione indipendente, invece di essere racchiusa in un'unica transazione che copra tutte le sessioni del ramo. È una scelta voluta, non un limite del sistema: se il fallimento di un singolo rimborso facesse fallire anche gli altri già conclusi con successo, si penalizzerebbero driver che non hanno responsabilità in quel fallimento.
 
 Ogni chiusura forzata produce due effetti economici distinti, salvati nella stessa transazione, il rimborso al Driver e l'accredito
 allo Station Operator.
@@ -326,9 +326,9 @@ l'energia pagata ma non ancora erogata al momento dello stacco. Lo Station
 Operator, allo stesso tempo, viene comunque accreditato della propria quota
 sull'intera energia realmente erogata fino a quel punto. L'interruzione non annulla quindi l'intera operazione: divide il conto tra le due parti in base a cosa è realmente accaduto prima dello stop.
 
-\subsubsection*{Il ritorno in servizio: l'isteresi termica}
+\subsubsection*{Rientro in servizio delle colonnine}
 
-L'emergenza però non è uno stato definitivo, e il \texttt{LoadBalancerService} gestisce anche la strada del ritorno. Il trasformatore non ha una soglia sola, ma \textbf{due}: una di \emph{allarme} a 90\,°C, oltre la quale scatta il \texttt{THERMAL\_ALERT} appena descritto, e una di \emph{rientro} più bassa, a 70\,°C. Quando la temperatura, non essendoci più ricariche attive su quel ramo, ridiscende sotto i 70\,°C, il trasformatore emette un secondo evento, \texttt{COOLING\_COMPLETE}, che lo stesso observer intercetta per riportare ad \texttt{ACTIVE} tutte e sole le colonnine rimaste in \texttt{OVERLOADED}, di nuovo in un'unica transazione.
+L'emergenza però non è uno stato definitivo, e il \texttt{LoadBalancerService} gestisce anche la fase di rientro. Il trasformatore non ha una soglia sola, ma \textbf{due}: una di \emph{allarme} a 90\,°C, oltre la quale scatta il \texttt{THERMAL\_ALERT} appena descritto, e una di \emph{rientro} più bassa, a 70\,°C. Quando la temperatura, non essendoci più ricariche attive su quel ramo, scende nuovamentesotto i 70\,°C, il trasformatore emette un secondo avviso, \texttt{COOLING\_COMPLETE}, che lo stesso observer intercetta per riportare ad \texttt{ACTIVE} tutte e sole le colonnine rimaste in \texttt{OVERLOADED}, di nuovo in un'unica transazione.
 
 \vspace{0.3cm}
 \noindent\begin{minipage}{\linewidth}
@@ -350,15 +350,15 @@ private void handleCoolingComplete(PowerTransformer transformer) {
 \end{minipage}
 \vspace{0.3cm}
 
-La distanza tra le due soglie non è arbitraria: è un'\textbf{isteresi}, ed è ciò che impedisce al sistema di oscillare. Con una soglia sola, un trasformatore fermo esattamente sul valore critico riattiverebbe le colonnine, che ricomincerebbero subito a scaldare, facendolo risalire sopra la soglia e provocando un nuovo blocco: un ciclo di accensioni e spegnimenti a raffica. Imponendo che per rientrare si debba scendere \emph{ben sotto} il punto in cui si è usciti, il sistema si concede un margine di raffreddamento reale prima di riaprire il ramo. È lo stesso principio del termostato di casa, che non riaccende la caldaia al primo decimo di grado sotto la temperatura impostata. Il filtro \texttt{if (station.getStatus() == OVERLOADED)} garantisce inoltre che il rientro riguardi solo le colonnine spente dall'emergenza, senza risvegliare quelle che si trovano in altri stati per ragioni indipendenti (per esempio sospese dall'Energy Manager per qualità scadente).
+La distanza tra le due soglie è fondamentale perchè evita che il sistema oscilli. Infatti se ci fosse una soglia sola, un trasformatore fermo esattamente sul valore critico riattiverebbe le colonnine, che ricomincerebbero subito a scaldare, facendolo risalire sopra la soglia e provocando un nuovo blocco. Si avrebbe sostanzialmente un ciclo di accensioni e spegnimenti a raffica. Imponendo che per rientrare si debba scendere \emph{ben sotto} il punto in cui si è usciti, si ottiene un margine di raffreddamento reale prima di riaprire il ramo. Il filtro \texttt{if (station.getStatus() == OVERLOADED)} garantisce inoltre che il rientro riguardi solo le colonnine spente dall'emergenza, senza risvegliare quelle che si trovano in altri stati per ragioni indipendenti (per esempio sospese dall'Energy Manager per qualità scadente).
 
 \subsection{SessionService}
 \label{subsec:sessionservice}
-Mentre il \texttt{LoadBalancerService} gestisce le emergenze, il \texttt{SessionService} governa la normale operatività economica ed energetica: è il servizio più sollecitato del sistema, invocato ad ogni tick del \texttt{GridMonitor} per ciascuna sessione in corso.
+Mentre il \texttt{LoadBalancerService} gestisce le emergenze, il \texttt{SessionService} governa l' operatività economica ed energetica: è il servizio più sollecitato del sistema, invocato ad ogni tick del \texttt{GridMonitor} per ciascuna sessione in corso.
 
-\subsubsection*{Il denaro si scala tick per tick, non a fine ricarica}
+\subsubsection*{Addebito progressivo del wallet durante la ricarica}
 
-È il punto che più spesso viene frainteso, ed è bene fissarlo subito: \textbf{il portafoglio del Driver non viene addebitato al termine della ricarica, ma progressivamente, cinque secondi alla volta, dal motore di simulazione.} Ogni tick calcola l'energia erogata nell'intervallo (la potenza della colonnina moltiplicata per la frazione d'ora corrispondente), ne chiede il costo alla \texttt{ChargingStrategy} in uso, e scala subito quella cifra dal saldo:
+il portafoglio del Driver non viene addebitato al termine della ricarica, ma progressivamente, cinque secondi alla volta, dal GridMonitor. Ogni tick calcola l'energia erogata nell'intervallo (la potenza della colonnina moltiplicata per la frazione d'ora corrispondente), ne chiede il costo alla \texttt{ChargingStrategy} in uso, e scala subito quella cifra dal saldo:
 
 \vspace{0.3cm}
 \noindent\begin{minipage}{\linewidth}
@@ -402,33 +402,6 @@ public void addTick(ChargingSession session, ChargingStrategy strategy) {
 \end{minipage}
 \vspace{0.3cm}
 
-Le due scritture che il tick produce, il nuovo saldo del Driver e il nuovo stato della sessione, sono correlate: un saldo scalato senza i kWh corrispondenti registrati (o viceversa) sarebbe uno stato incoerente. Per questo il controllo transazionale non è delegato ai singoli DAO ma centralizzato nel Service, secondo il pattern \textbf{Unit of Work}: il servizio apre \emph{una sola} connessione, disabilita l'auto-commit e da quella connessione fabbrica tutti i DAO che gli servono (\texttt{daoFactory.createXxxDao(connection)}). Condividendo la connessione, i DAO condividono la transazione, e un unico \texttt{commit} finale fissa entrambe le scritture, oppure un \texttt{rollback} le annulla entrambe.
-
-Le ultime righe mostrano un dettaglio elegante: è lo stesso \texttt{addTick} a rilevare le due condizioni di uscita naturali di una ricarica. Se dopo l'addebito il saldo è sceso a zero, la sessione viene interrotta per fondi esauriti; se il dominio ha nel frattempo portato la batteria al 100\%, viene chiusa normalmente.
-
-\subsubsection*{\texttt{closeSession}: la ricevuta non è un secondo addebito}
-
-Da qui discende la conseguenza più controintuitiva. Quando il Driver preme "Stop", \texttt{closeSession} \textbf{non tocca il portafoglio}: i soldi sono già stati scalati, tick dopo tick, durante la ricarica. Il metodo si limita a \emph{leggere} il costo totale già accumulato e a creare con esso una \texttt{Transaction} di tipo \texttt{CHARGE}, che ha valore di \emph{ricevuta riassuntiva}, non di nuovo prelievo. Nella stessa transazione, la colonnina torna disponibile e allo Station Operator viene accreditata la sua quota (tariffa operatore $\times$ kWh erogati).
-
-Su quest'ultimo accredito vigila una piccola guardia che vale la pena spiegare:
-
-\vspace{0.3cm}
-\noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java, caption={La guardia contro il doppio accredito}]
-public Transaction closeSession(ChargingSession session) {
-    boolean wasActive = session.isActive();   // letta PRIMA di mutare lo stato
-    session.complete();
-    ...
-    if (wasActive && station.getOperator() != null) {
-        // accredito della quota operatore
-    }
-    ...
-}
-\end{lstlisting}
-\end{minipage}
-\vspace{0.3cm}
-
-\texttt{wasActive} viene letta \emph{prima} che \texttt{session.complete()} cambi lo stato. Se per qualunque motivo la chiusura venisse invocata due volte sulla stessa sessione, alla seconda chiamata la sessione non risulterebbe più attiva e l'accredito verrebbe saltato: il metodo è quindi \textbf{idempotente rispetto agli effetti contabili}, e l'operatore non può essere pagato due volte per la stessa energia. La stessa guardia protegge \texttt{forceClose}, dove è ancora più importante, perché la chiusura forzata può arrivare da due strade diverse (l'allarme termico e l'esaurimento dei fondi).
 
 \subsection{StationService}
 Sebbene gran parte di questo servizio si occupi di gestire il salvataggio e la validazione delle nuove colonnine (delegando i controlli di sicurezza ai Factory Method del dominio), è presente una complessità notevole nella gestione delle prenotazioni (\textit{Short-Term Hold}).
@@ -447,11 +420,11 @@ UPDATE charging_stations
 \end{minipage}
 \vspace{0.3cm}
 
-La clausola \texttt{AND status = 'ACTIVE'} è il cuore del meccanismo: se un altro Driver è arrivato un istante prima, la riga non è più \texttt{ACTIVE}, la \texttt{UPDATE} non aggiorna alcuna riga e restituisce \texttt{0}. Il DAO riporta quel \texttt{0} al servizio, che lo traduce in una \texttt{StationNotAvailable\allowbreak Exception} per il secondo utente. Vince chi arriva primo, e la decisione è presa una volta sola, dal database.
+È la clausola \texttt{AND status = 'ACTIVE'} a far funzionare il meccanismo: se un altro Driver è arrivato un istante prima, la riga non è più \texttt{ACTIVE}, la \texttt{UPDATE} non aggiorna alcuna riga e restituisce \texttt{0}. Il DAO riporta quel \texttt{0} al servizio, che lo traduce in una \texttt{StationNotAvailable\allowbreak Exception} per il secondo utente.
 
-Vale la pena essere precisi sulla terminologia, perché è la domanda naturale: questo \textbf{non} è un lock pessimistico (nessun \texttt{SELECT ... FOR UPDATE} che blocca la riga in attesa), ma un \emph{update condizionale} di stampo ottimistico: non si impedisce al secondo Driver di provarci, si fa in modo che il suo tentativo fallisca in modo pulito e riconoscibile. Per una prenotazione, che è un'operazione breve e ad alta contesa, è la strategia più adatta: nessuna attesa, nessuna riga bloccata, e comunque un solo vincitore.
+In realtà a differenza di quanto si potrebbe intuire non si impedisce al secondo Driver di provarci, ma si fa in modo che il suo tentativo fallisca in modo pulito e riconoscibile. 
 
-Una precisazione doverosa, che riguarda anche il template del caso d'uso: l'applicazione è pensata per un utente alla volta, quindi questo scenario di corsa non può materialmente verificarsi nella demo. Si tratta di una scelta di \emph{progettazione difensiva}: la prenotazione è l'unico punto del sistema in cui due utenti competerebbero per la stessa risorsa, ed è stata scritta fin da subito in modo da restare corretta in uno scenario multiutente, senza che ciò richieda di riscrivere il servizio.
+Inoltre è bene specificare che l'applicazione è stata implementata per un utente alla volta, quindi questo scenario di corsa non può materialmente verificarsi nella demo. La prenotazione è l'unico punto del sistema in cui due utenti competerebbero per la stessa risorsa, ed è stata scritta per un eventuale sistema multiutente.
 
 \subsection{Sicurezza e Validazione}
 \label{subsec:validazione}
@@ -462,7 +435,7 @@ La responsabilità di sicurezza dell'applicazione è divisa in due aree distinte
     \item \textbf{Ammissione in rete (\texttt{ValidationService}):} Nessuna colonnina registrata da un operatore entra in rete automaticamente. Alla registrazione nasce in stato \texttt{PENDING\_VERIFICATION} e vi resta finché un Energy Manager non la approva o la rifiuta.
 \end{itemize}
 
-Il secondo punto merita una precisazione, perché è facile leggere l'approvazione come un semplice "sì/no" amministrativo, mentre nel nostro modello è anche un \emph{atto economico}: \textbf{approvare una colonnina significa fissarne la quota di piattaforma}. Al Manager, al momento dell'approvazione, viene chiesta la tariffa in euro per kWh che la piattaforma tratterrà su ogni ricarica erogata da quella colonnina; da quel momento quel valore entra nel calcolo del prezzo di ogni sessione su quella colonnina. Il gestore della rete, cioè, non si limita ad autorizzare: immette il proprio prezzo in un mercato a due lati, in cui l'operatore fissa la propria quota e la piattaforma la sua.
+Il secondo punto merita una precisazione, perché è facile leggere l'approvazione come un semplice "sì/no" amministrativo, mentre nel nostro modello è anche un \emph{atto economico}: \textbf{approvare una colonnina significa fissarne la quota di piattaforma}. Al Manager, al momento dell'approvazione, viene chiesta la tariffa in euro per kWh che la piattaforma tratterrà su ogni ricarica erogata da quella colonnina; da quel momento quel valore entra nel calcolo del prezzo di ogni sessione su quella colonnina. Il gestore della rete, cioè, non si limita ad autorizzare: fissa anche il prezzo che la piattaforma applica su ogni ricarica, mentre l'operatore resta libero di fissare il proprio.
 
 La divisione delle responsabilità all'interno del flusso è la parte interessante. Il servizio \emph{non} decide se la transizione di stato sia lecita: si limita a orchestrare la transazione e a chiedere al dominio di applicarla.
 
@@ -522,7 +495,7 @@ Il flusso di controllo della qualità del servizio è interamente gestito dal \t
 
 In questa prima fase, il sistema esegue un duplice controllo. Dapprima verifica a livello database che l'utente non abbia già recensito quella specifica sessione; superato questo filtro, delega la validazione del formato del voto (da 1 a 5 stelle) al dominio.
 
-La parte interessante e funzione aggiuntiva di questa componente risiede nella logica che si innesca subito dopo il salvataggio. Infatti, non essendoci un controllo umano costante sulle singole colonnine, il servizio ricalcola in tempo reale la media della stazione appena recensita. Se tale parametro scende sotto la soglia critica di 2.0 (con un campione minimo di 5 valutazioni), il sistema interviene autonomamente generando un \texttt{RatingAlert}.
+La parte interessante di questo servizio è la logica che si innesca subito dopo il salvataggio. Non essendoci un controllo umano costante sulle singole colonnine, il servizio ricalcola in tempo reale la media della stazione appena recensita. Se tale parametro scende sotto la soglia critica di 2.0 (con un campione minimo di 5 valutazioni), il sistema interviene autonomamente generando un \texttt{RatingAlert}.
 
 \vspace{0.2cm}
 \noindent\begin{minipage}{\linewidth}
@@ -623,11 +596,11 @@ C'è un vincolo tecnico da cui non si scappa: \textbf{i Controller non li istanz
 
 La soluzione adottata è il pattern \textbf{Service Locator}. Quando un controller ha bisogno di un servizio non se lo fa passare, ma va a chiederlo a un punto centrale noto, il \texttt{NavigationManager}, che espone metodi come \texttt{getSessionService()}, \texttt{getStationService()} e \texttt{getCurrentUser()}. Il recupero avviene nel metodo \texttt{initialize()}, che JavaFX invoca subito dopo aver costruito il controller e iniettato i campi \texttt{@FXML}.
 
-Vale la pena notare la coerenza della scelta, perché è il punto in cui questo capitolo si collega direttamente al Capitolo~\ref{ch:testing}: i \emph{Controller} usano il Service Locator \emph{perché non siamo noi a istanziarli}, ma i \emph{Service} fra loro continuano a usare la classica dependency injection (ricevono la \texttt{DaoFactory} nel costruttore), perché i Service li creiamo noi, e passare le dipendenze dall'esterno è esattamente ciò che permette di sostituirle con dei mock e testarli in isolamento. Due tecniche diverse, ciascuna là dove è quella giusta, e non la stessa ovunque per inerzia.
+È bene notare la coerenza della scelta, perché è il punto in cui questo capitolo si collega direttamente al Capitolo~\ref{ch:testing}: i \emph{Controller} usano il Service Locator \emph{perché non siamo noi a istanziarli}, ma i \emph{Service} fra loro continuano a usare la classica dependency injection (ricevono la \texttt{DaoFactory} nel costruttore), perché i Service li creiamo noi, e passare le dipendenze dall'esterno è esattamente ciò che permette di sostituirle con dei mock e testarli in isolamento.
 
 Un principio che ne discende, tenuto fermo in tutto il progetto: \textbf{un Controller non parla mai direttamente al database}. Passa sempre da un Service. Un pezzo di interfaccia che scavalcasse la logica di business per andare dritto a un DAO renderebbe impossibile far rispettare le regole (validazioni, calcoli, transizioni di stato) che nel DAO non esistono.
 
-\subsubsection{Due orologi separati: il polling della Live Session}
+\subsubsection{Il polling della Live Session, indipendente dal GridMonitor}
 \label{subsec:polling}
 
 La schermata di ricarica in tempo reale (\texttt{LiveSessionController}) è quella in cui il rapporto fra interfaccia e simulazione si vede meglio, ed è anche quella che si presta al fraintendimento più naturale: verrebbe da pensare che la schermata sia un \emph{observer} del \texttt{GridMonitor}, notificata ad ogni tick. Non è così, e la distinzione è deliberata.
@@ -645,7 +618,7 @@ pollTimeline.play();
 \end{minipage}
 \vspace{0.3cm}
 
-Ci sono quindi due orologi che battono a ritmi diversi e non si parlano mai direttamente: il \texttt{GridMonitor} (ogni 5 secondi) \emph{scrive}, la schermata (ogni secondo) \emph{legge}, e l'unico punto di incontro è il database, che resta la sola fonte di verità. Il vantaggio non è teorico ma molto concreto e realistico: \textbf{se il Driver chiude la schermata, la ricarica prosegue lo stesso}, esattamente come una colonnina reale continua a caricare anche quando non si guarda l'app sul telefono. Per rientrare, il menu del Driver mostra una scorciatoia "Resume" verso la sessione ancora in corso. Se la schermata fosse stata un observer del motore, chiuderla avrebbe significato staccare l'ascoltatore, e sarebbe stato molto più facile scrivere per sbaglio un'interfaccia che, chiudendosi, ferma la simulazione.
+Il \texttt{GridMonitor} scrive ogni 5 secondi, la schermata legge ogni secondo, e i due cicli non comunicano mai direttamente: l'unico punto di sincronizzazione è il database, che resta la sola fonte di verità. Il vantaggio è concreto: \textbf{se il Driver chiude la schermata, la ricarica prosegue lo stesso}, esattamente come una colonnina reale continua a caricare anche quando non si guarda l'app sul telefono. Per rientrare, il menu del Driver mostra una scorciatoia "Resume" verso la sessione ancora in corso. Se la schermata fosse stata un observer del motore di simulazione, chiuderla avrebbe significato staccare l'ascoltatore, e sarebbe stato molto più facile scrivere per sbaglio un'interfaccia che, chiudendosi, ferma la simulazione.
 
 C'è infine un accorgimento tecnico che questa scelta ha reso necessario. Quando la ricarica termina, la schermata deve capire \emph{perché}: conclusione normale (batteria carica o stop volontario) oppure interruzione d'autorità per surriscaldamento, caso in cui va mostrata una finestra di emergenza. Il problema è che JavaFX non consente di aprire una finestra modale mentre è in esecuzione un'animazione, e una \texttt{Timeline} è a tutti gli effetti un'animazione. La comparsa del messaggio è quindi stata rinviata al ciclo di eventi immediatamente successivo, impacchettandola in \texttt{Platform.runLater(...)}. È un punto che si presta a un equivoco che conviene prevenire: qui \texttt{runLater} serve \emph{esclusivamente} a rimandare il dialogo fuori dal ciclo della \texttt{Timeline}, \textbf{non} a spostare l'aggiornamento da un thread di background al thread grafico, perché la \texttt{Timeline} gira già sul thread di JavaFX.
 
@@ -666,7 +639,7 @@ BigDecimal revenue = loggedOperator.getTotalEarnings() != null
 \end{minipage}
 \vspace{0.3cm}
 
-L'oggetto \texttt{User} tenuto in sessione contiene una \emph{fotografia} dei dati dell'utente al momento del login. Alcuni di quei dati cambiano però mentre l'utente naviga: il saldo del Driver scende ad ogni tick di ricarica, i guadagni dell'operatore salgono ad ogni sessione chiusa. Una schermata che mostrasse il valore in memoria mostrerebbe un numero vecchio. La regola, applicata a tutte le schermate che espongono valori mutevoli, si riassume in una frase: \emph{la sessione dice \textbf{chi sei}, non \textbf{quanto hai}}. L'identità e il ruolo si leggono dalla sessione; qualunque valore in continua variazione si rilegge dal Service competente all'apertura della schermata. È una convenzione che chiude in un colpo solo un'intera categoria di bug, quelli in cui l'utente vede numeri che non tornano.
+L'oggetto \texttt{User} tenuto in sessione contiene una \emph{fotografia} dei dati dell'utente al momento del login. Alcuni di quei dati cambiano però mentre l'utente naviga: il saldo del Driver scende ad ogni tick di ricarica, i guadagni dell'operatore salgono ad ogni sessione chiusa. Una schermata che mostrasse il valore in memoria mostrerebbe un numero vecchio. La regola, applicata a tutte le schermate che espongono valori mutevoli, è che l'identità e il ruolo si leggono dalla sessione, mentre qualunque valore soggetto a variazione si rilegge dal Service competente ogni volta che la schermata viene aperta. Questa convenzione evita un'intera categoria di bug, quelli in cui l'utente vede numeri non aggiornati.
 
 \section{Persistenza: il livello DAO e il mapping oggetti/tabelle}
 \label{sec:dao}
@@ -731,7 +704,7 @@ private User extractUserFromResultSet(ResultSet rs) throws SQLException {
 \end{minipage}
 \vspace{0.3cm}
 
-Colonne come \texttt{wallet\_balance} o \texttt{total\_earnings} esistono nella tabella ma hanno senso solo per un tipo di utente: per un Energy Manager, ad esempio, restano ovviamente \texttt{NULL}. Il DAO legge la colonna \texttt{role} e usa quel valore per capire quale oggetto Java ricostruire, e quindi come debba muoversi.
+Colonne come \texttt{wallet\_balance} o \texttt{total\_earnings} esistono nella tabella ma hanno senso solo per un tipo di utente: per un Energy Manager, ad esempio, restano \texttt{NULL}. Il DAO legge la colonna \texttt{role} e usa quel valore per capire quale oggetto Java ricostruire.
 
 \subsubsection{Metodo \texttt{reconstitute()}}
 
@@ -753,7 +726,7 @@ return RatingAlert.reconstitute(alertId, station, avgAtCreation, status, manager
 \end{minipage}
 \vspace{0.3cm}
 
-Questa \texttt{ChargingStation} è effettivamente un oggetto reale (viene chiamato "stub"), ma della quale vengono inseriti solo i campi necessari, mentre il resto è \texttt{null}. In questo modo si ottiene maggiore efficienza, infatti evita una query aggiuntiva per recuperare dati che non verrebbero comunque mostrati, tuttavia nel caso in futuro venisse ripassato a un metodo che si aspetta una colonnina completa (ad esempio per un aggiornamento), andrebbe prima ricaricato per intero.
+Questa \texttt{ChargingStation} è un oggetto reale (uno "stub"), di cui vengono valorizzati solo i campi necessari, mentre il resto resta \texttt{null}. In questo modo si evita una query aggiuntiva per recuperare dati che non verrebbero comunque mostrati; se però in futuro venisse ripassato a un metodo che si aspetta una colonnina completa (ad esempio per un aggiornamento), andrebbe prima ricaricato per intero.
 
 \subsubsection{I vincoli dello schema}
 
@@ -771,11 +744,11 @@ CONSTRAINT uq_driver_session UNIQUE (driver_id, session_id)
 \end{minipage}
 \vspace{0.3cm}
 
-Se per un errore di programmazione un service riuscisse a costruire un saldo negativo o un voto fuori dal range 1-5, sarebbe comunque il database a rifiutare l'inserimento. Può essere visto come un secondo controllo: nel caso ci sia qualcosa che non vada bene nel codice Java, questo non riuscirebbe comunque a produrre dati incoerenti nel database.
+Se per un errore di programmazione un service costruisse un saldo negativo o un voto fuori dal range 1-5, sarebbe comunque il database a rifiutare l'inserimento: è un secondo controllo, indipendente da eventuali bug nel codice Java.
 
 \section{Idiomi e Design Pattern}
 \label{ch:pattern}
-Per risolvere alcuni problemi e per rendere il codice aperto per un eventuale estensione futura, sono stati usati alcuni design pattern.
+Per risolvere alcuni problemi specifici e per rendere il codice più aperto a future estensioni, sono stati usati alcuni design pattern.
 
 \subsection{Observer Pattern}
 \label{sec: Observer Pattern}
@@ -804,12 +777,12 @@ public enum TransformerEvent {
 \end{minipage}
 \vspace{0.3cm}
 
-Il vantaggio è che i due componenti restano indipendenti, se per esempio volessimo aggiungere un secondo componente che si limita a registrare gli allarmi, basterebbe aggiungere agli ascoltatori anche lui, senza dover modificare il codice del trasformatore.
+Il vantaggio è che i due componenti restano indipendenti: per aggiungere un secondo componente che si limiti a registrare gli allarmi, basterebbe iscriverlo come nuovo observer, senza modificare il codice del trasformatore.
 
 \subsection{Strategy Pattern}
 
 
-Un Driver può scegliere tra due modalità di ricarica, Fast o Eco, e ciascuna ha un proprio modo di calcolare il costo e il calore prodotto. Invece che usare un \texttt{if/else},che chiaramente sarebbe dovuta essere modificata nel caso di un'aggiunta futura, si è definita un'unica interfaccia comune che poi ogni modalità implementa diversamente. In questo modo \texttt{SessionService} si interfaccia senza sapere quale modalità di ricarica ci sia dietro.
+Un Driver può scegliere tra due modalità di ricarica, Fast o Eco, e ciascuna ha un proprio modo di calcolare il costo e il calore prodotto. Invece di usare un \texttt{if/else}, che andrebbe modificato ad ogni modalità aggiunta in futuro, si è definita un'unica interfaccia comune che ogni modalità implementa diversamente. In questo modo \texttt{SessionService} si interfaccia senza sapere quale modalità di ricarica ci sia dietro.
 
 \vspace{0.3cm}
 \noindent\begin{minipage}{\linewidth}
@@ -825,8 +798,7 @@ public interface ChargingStrategy {
 
 \subsection{Factory Method}
 
-Per evitare che alcuni oggetti possano essere creati pur non avendo rispettato determinate regole,la creazione di un oggetto deve
- passare sempre da un metodo che prima controlla che tutto sia in regola, e solo dopo costruisce l'oggetto:
+Per evitare che si creino oggetti senza rispettare le regole del dominio, la creazione di un oggetto passa sempre da un metodo che prima controlla che tutto sia in regola, e solo dopo costruisce l'oggetto:
 
 \vspace{0.3cm}
 \noindent\begin{minipage}{\linewidth}
@@ -912,7 +884,7 @@ public class GridCluster {
 \end{minipage}
 \vspace{0.3cm}
 
-La parola \texttt{synchronized} su \texttt{getInstance()} serve perché più componenti girano in parallelo su thread diversi: senza questa protezione, due richieste arrivate nello stesso istante potrebbero entrambe trovare \texttt{instance} ancora nulla e crearne due copie per errore. Da notare inoltre che i dati non vengono letti dal database ad ogni richiesta: \texttt{init()} viene chiamato una sola volta all'avvio dell'applicazione, e da quel momento in poi \texttt{getStationsForTransformer()} risponde all'istante leggendo dalla mappa già in memoria, senza interrogare più il database. La cache non è però immutabile: quando un operatore registra una nuova colonnina, lo \texttt{StationService} la aggiunge esplicitamente al cluster (\texttt{registerNewStation}), così che la mappa in memoria resti allineata al database senza doverla ricostruire da capo.
+La parola \texttt{synchronized} su \texttt{getInstance()} serve perché più componenti girano in parallelo su thread diversi: senza questa protezione, due richieste arrivate nello stesso istante potrebbero entrambe trovare \texttt{instance} ancora nulla e crearne due copie per errore. I dati non vengono letti dal database ad ogni richiesta: \texttt{init()} viene chiamato una sola volta all'avvio dell'applicazione, e da quel momento in poi \texttt{getStationsForTransformer()} risponde all'istante leggendo dalla mappa già in memoria, senza interrogare più il database. La cache non è però immutabile: quando un operatore registra una nuova colonnina, lo \texttt{StationService} la aggiunge esplicitamente al cluster (\texttt{registerNewStation}), così che la mappa in memoria resti allineata al database senza doverla ricostruire da capo.
 
 \subsection{DAO (Data Access Object)}
 
@@ -924,7 +896,7 @@ La separazione fra \emph{interfaccia} (\texttt{StationDao}) e \emph{implementazi
 
 Strettamente legato al DAO, e già visto all'opera nel paragrafo~\ref{subsec:sessionservice}, c'è il modo in cui il progetto tratta le operazioni che toccano più tabelle insieme. Un tick di ricarica scrive sul saldo del Driver \emph{e} sullo stato della sessione; la chiusura di una sessione scrive su ricevute, colonnina, sessione e guadagni dell'operatore. Sono scritture correlate: eseguirne solo una parte lascerebbe il sistema in uno stato incoerente (denaro scalato senza energia registrata, o viceversa).
 
-Il pattern applicato è lo \textbf{Unit of Work}: il Service apre \emph{una sola} connessione, disabilita l'auto-commit, e da quella connessione fabbrica tutti i DAO che gli servono. Un punto su cui vale la pena essere espliciti, perché è la domanda naturale: i metodi dei DAO \textbf{non ricevono la connessione come parametro}; la connessione viene loro iniettata al momento della creazione, tramite la factory (\texttt{daoFactory.createXxxDao(conn)}). Condividendo la connessione, più DAO condividono automaticamente la stessa transazione, e alla fine un unico \texttt{commit} fissa tutto oppure un \texttt{rollback} annulla ogni modifica parziale.
+Il pattern applicato è lo \textbf{Unit of Work}: il Service apre \emph{una sola} connessione, disabilita l'auto-commit, e da quella connessione fabbrica tutti i DAO che gli servono. Un punto su cui è bene essere espliciti, perché è la domanda naturale: i metodi dei DAO \textbf{non ricevono la connessione come parametro}; la connessione viene loro iniettata al momento della creazione, tramite la factory (\texttt{daoFactory.createXxxDao(conn)}). Condividendo la connessione, più DAO condividono automaticamente la stessa transazione, e alla fine un unico \texttt{commit} fissa tutto oppure un \texttt{rollback} annulla ogni modifica parziale.
 
 \subsection{Service Locator}
 
