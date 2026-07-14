@@ -1,0 +1,63 @@
+\begin{xltabular}{\textwidth}{| >{\bfseries}l | X |}
+
+% --- INTESTAZIONE PRIMA PAGINA ---
+\caption{Caso d'Uso: Aggiornamento dello Stato del Sistema} \label{tab:uc_update_state} \\
+\hline
+\rowcolor{gray!15} Campo & \textbf{Contenuto} \\ \hline
+\endfirsthead
+
+% --- INTESTAZIONE PAGINE SUCCESSIVE ---
+\multicolumn{2}{c}{{\tablename\ \thetable{} -- Continua dalla pagina precedente}} \\
+\hline
+\rowcolor{gray!15} Campo & \textbf{Contenuto} \\ \hline
+\endhead
+
+% --- PIÈ DI PAGINA (se si spezza) ---
+\hline
+\multicolumn{2}{r}{\textit{Continua nella pagina successiva...}} \\
+\endfoot
+
+% --- PIÈ DI PAGINA FINALE ---
+\endlastfoot
+
+% --- CONTENUTO ---
+Nome & Aggiornamento dello Stato del Sistema (Update System State) \\ \hline
+Livello & Obiettivo di Sistema (System Goal) \\ \hline
+Descrizione & Il \texttt{GridMonitor} è un thread \textit{daemon} avviato insieme all'applicazione ed è l'unico componente che agisce di propria iniziativa: tutti gli altri servizi vengono invocati su richiesta. Ogni 5 secondi fa avanzare la simulazione: libera le prenotazioni scadute, fa progredire le sessioni di ricarica attive addebitandone il costo al Conducente, accumula calore sui trasformatori e verifica la qualità del servizio. \\ \hline
+Pre-condizioni & \parbox[t]{\linewidth}{%
+L'applicazione è avviata e il \texttt{GridMonitor} è in esecuzione.\\
+Il ciclo produce effetti osservabili se esiste almeno una sessione in stato \texttt{ACTIVE} oppure una prenotazione \texttt{RESERVED} scaduta.
+} \\ \hline
+Post-condizioni & Le prenotazioni scadute sono tornate \texttt{ACTIVE}. Ogni sessione attiva ha batteria, kWh erogati e costo totale aggiornati, e l'importo del tick è stato scalato dal portafoglio del Conducente: le due scritture (sessione e saldo) sono salvate in un'unica transazione. La temperatura e il carico di ogni trasformatore riflettono il calore generato nel tick. \\ \hline
+Attori & Grid Monitor (Sistema) \\ \hline
+Unit Test & \texttt{GridMonitorTest} \\ \hline
+Flusso Principale &
+\begin{enumerate}[leftmargin=*, nosep]
+    \item Il timer del \texttt{GridMonitor} scatta (ogni 5 secondi).
+    \item Il sistema libera le prenotazioni scadute (\textbf{Expire Short-Term Holds}, \texttt{<<include>>}): le colonnine \texttt{RESERVED} il cui \texttt{expiration\_timestamp} è ormai passato tornano \texttt{ACTIVE}.
+    \item Per ogni sessione \texttt{ACTIVE} il sistema calcola l'energia erogata nel tick, pari alla potenza della colonnina moltiplicata per la frazione d'ora corrispondente a 5 secondi. \textbf{L'energia erogata non dipende dalla strategia}: la batteria avanza alla stessa velocità in entrambe le modalità, perché la potenza è una caratteristica fisica della colonnina, non della modalità di ricarica scelta.
+    \item La strategia (\textbf{Fast Charge} o \textbf{Eco Charge}) determina invece il \emph{costo} del tick e il \emph{calore} prodotto:
+    \begin{itemize}[leftmargin=*, nosep]
+        \item \textbf{Fast Charge:} il Conducente paga la tariffa piena, cioè il prezzo base della colonnina (quota operatore più quota piattaforma, quest'ultima scontata secondo il piano di abbonamento); la sessione genera il doppio del calore.
+        \item \textbf{Eco Charge:} sullo stesso prezzo base viene applicato un ulteriore sconto del 10\%; la sessione genera metà del calore.
+    \end{itemize}
+    \item Il sistema addebita il costo del tick al portafoglio del Conducente e salva sessione e saldo aggiornati in un'unica transazione.
+    \item Il sistema somma il calore prodotto da tutte le sessioni, raggruppandolo per trasformatore, e lo applica a ciascuno di essi, che ne ricalcola temperatura e percentuale di carico.
+    \item Il sistema esegue infine il controllo di qualità: se una colonnina ha una media inferiore a 2.0 con almeno 5 valutazioni, viene aperta una segnalazione (si veda il caso d'uso \textit{Gestione di un Alert di Qualità}, Tab.~\ref{tab:uc_rating_alert}).
+\end{enumerate} \\ \hline
+Flussi Alternativi &
+\textbf{3. Batteria al 100\%:} \newline
+3.1. Se il tick porta la batteria al 100\%, la sessione passa a \texttt{COMPLETED} e viene chiusa. \newline
+3.2. Il sistema emette la ricevuta (\texttt{Transaction} di tipo \texttt{CHARGE}) con il costo totale già accumulato tick dopo tick, e riporta la colonnina ad \texttt{ACTIVE}. \newline\newline
+\textbf{5. Credito esaurito durante la ricarica:} \newline
+5.1. Prima di procedere all'addebito, il sistema verifica che il saldo del Conducente copra il costo del tick. \newline
+5.2. Se non lo copre, il tick non viene addebitato: il portafoglio non può in nessun caso scendere sotto lo zero. \newline
+5.3. La sessione viene quindi chiusa d'autorità dal sistema, seguendo lo stesso percorso della conclusione normale: viene emessa la ricevuta (\texttt{Transaction} di tipo \texttt{CHARGE}) con il costo effettivamente accumulato fino a quel momento e la colonnina torna \texttt{ACTIVE}. \newline
+5.4. Il Conducente potrà avviare una nuova ricarica solo dopo aver ricaricato il portafoglio: l'apertura di una sessione richiede infatti un saldo minimo pari al costo di 5 kWh presso quella colonnina. \newline\newline
+\textbf{6. Allarme Termico (\texttt{<<extend>>}):} \newline
+6.1. Se applicando il calore la temperatura di un trasformatore supera i 90\,°C, il trasformatore notifica i propri \textit{observer} con l'evento \texttt{THERMAL\_ALERT}. \newline
+6.2. Il \texttt{LoadBalancerService} porta \textbf{prima} tutte le colonnine di quel trasformatore allo stato \texttt{OVERLOADED}, in un'unica transazione atomica, impedendo l'avvio di nuove ricariche sul ramo. \newline
+6.3. \textbf{Solo dopo} interrompe le sessioni ancora in corso su quelle colonnine: ciascuna passa a \texttt{INTERRUPTED\_THERMAL}, il Conducente viene rimborsato del costo dell'ultimo tick (l'energia pagata ma non erogata al momento dello stacco) e allo Station Operator viene comunque accreditata la sua quota sull'energia realmente erogata. Ogni chiusura forzata ha una propria transazione indipendente: il fallimento di un rimborso non annulla quelli già andati a buon fine. \newline
+6.4. Quando, non essendoci più ricariche attive sul ramo, la temperatura ridiscende sotto i 70\,°C, il trasformatore emette l'evento \texttt{COOLING\_COMPLETE} e le colonnine rimaste \texttt{OVERLOADED} tornano \texttt{ACTIVE}. La distanza fra le due soglie (isteresi) evita che il sistema oscilli, accendendo e spegnendo le colonnine attorno a un unico valore. \\ \hline
+
+\end{xltabular}

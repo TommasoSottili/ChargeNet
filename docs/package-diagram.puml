@@ -16,17 +16,19 @@ skinparam package {
     FontStyle bold
 }
 
+' Palette allineata a quella dei diagrammi di classe:
+' presentation #f9e8e7 | business #fce3bd | domain #dce7f0 | dao #d3f4d7
 skinparam package<<ui>> {
-    BackgroundColor #BEE3F8
+    BackgroundColor #f9e8e7
 }
 skinparam package<<business>> {
-    BackgroundColor #C6F6D5
+    BackgroundColor #fce3bd
 }
 skinparam package<<domain>> {
-    BackgroundColor #FEFCBF
+    BackgroundColor #dce7f0
 }
 skinparam package<<persistence>> {
-    BackgroundColor #FED7D7
+    BackgroundColor #d3f4d7
 }
 
 ' ==========================================
@@ -43,7 +45,7 @@ package "presentation" <<ui>> as presentation {
 ' ==========================================
 package "business" <<business>> as business {
     package "services"
-    package "core" as businesscore
+    package "business.core"
     package "strategies"
     package "utils"
 }
@@ -73,27 +75,18 @@ database "PostgreSQL"
 ' ==========================================
 ' RELAZIONI E DIPENDENZE
 ' ==========================================
-controller ..> services : <<invokes>>
-presentation ..> domain : <<uses>>
+controller ..> services 
+presentation ..> domain
 
-services ..> interfaces : <<uses>>
-services ..> domain : <<manipulates>>
-strategies ..> domain : <<uses>>
-businesscore ..> domain : <<uses>>
+services ..> interfaces 
+services ..> domain 
+strategies ..> domain 
+"business.core" ..> domain 
 
-postgres ..> interfaces : <<implements>>
-dao ..> domain : <<maps>>
+postgres ..> interfaces 
+dao ..> domain 
 
-postgres ..> PostgreSQL : <<persists>>
-
-' REGOLA D'ORO: nessuna freccia esce dal package domain.
-' Il Domain Model non dipende da nessun altro livello.
-note right of domain
-  **Il domain non dipende da nulla.**
-  Nessuna classe sotto //domain// importa
-  //business//, //dao// o //presentation//:
-  tutte le frecce entrano, nessuna esce.
-end note
+postgres ..> PostgreSQL
 
 ' ==========================================
 ' ALLINEAMENTO SPAZIALE FORZATO
@@ -107,10 +100,10 @@ domain -[hidden]down- dao
 ' ==========================================
 legend bottom left
 |= Colore |= Layer Architetturale |
-| <back:#BEE3F8>   </back> | Presentation (UI) |
-| <back:#C6F6D5>   </back> | Business Logic |
-| <back:#FEFCBF>   </back> | Domain Model |
-| <back:#FED7D7>   </back> | Persistence (DAO) |
+| <back:#f9e8e7>   </back> | Presentation (UI) |
+| <back:#fce3bd>   </back> | Business Logic |
+| <back:#dce7f0>   </back> | Domain Model |
+| <back:#d3f4d7>   </back> | Persistence (DAO) |
 endlegend
 
 @enduml

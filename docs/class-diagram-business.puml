@@ -27,7 +27,7 @@ skinparam package {
 ' ==========================================
 '  DOMAIN LAYER (Riferimento Esterno)
 ' ==========================================
-package "domain" as PKG_DOMAIN #FFFFFF {
+package "domain" as PKG_DOMAIN #dce7f0 {
     together {
         class PowerTransformer
         interface Subject
@@ -39,9 +39,9 @@ package "domain" as PKG_DOMAIN #FFFFFF {
 ' ==========================================
 '  BUSINESS LAYER
 ' ==========================================
-package "business" as PKG_BUSINESS #FFFFFF {
+package "business" as PKG_BUSINESS #fce3bd {
 
-    package "core" as PKG_CORE #FFFFFF {
+    package "core" as PKG_CORE #F0F4F8 {
 
         class GridMonitor <<Thread Daemon>> {
             - sessionService: SessionService
@@ -50,107 +50,136 @@ package "business" as PKG_BUSINESS #FFFFFF {
             __
             + run(): void
             - onTick(): void
-            - processActiveSessions(): void
-            - processTransformers(): void
+            - processActiveSessions(): Map<PowerTransformer, Double>
+            - processTransformers(heatMap: Map<PowerTransformer, Double>): void
             - expireShortTermHolds(): void
             - checkRatingAlerts(): void
+            - findBestTransformerById(id: Long): PowerTransformer
         }
 
         class GridCluster <<Singleton>> {
             - {static} instance: GridCluster
             - transformers: List<PowerTransformer>
-            - transformerDao: TransformerDao
-            - stationDao: StationDao
+            - stationsByTransformer: Map<Long, List<ChargingStation>>
+            - allStations: List<ChargingStation>
             __
             + {static} getInstance(): GridCluster
-            + init(tDao, sDao): void
+            + init(tDao: TransformerDao, sDao: StationDao): void
+            + registerNewStation(s: ChargingStation): void
             + getTransformers(): List<PowerTransformer>
-            + getStationsForTransformer(id: int): List<ChargingStation>
-            + getNearestAvailable(...): List<ChargingStation>
+            + getStationsForTransformer(id: Long): List<ChargingStation>
+            + getNearestAvailable(lat: double, lon: double): List<ChargingStation>
         }
     }
 
-    package "strategies" as PKG_STRATEGIES #FFFFFF {
+    package "strategies" as PKG_STRATEGIES #F0F4F8 {
 
         interface ChargingStrategy <<interface>> {
             + calculateCost(kwh: double, station: ChargingStation, driver: Driver): double
             + getHeatIncrement(): double
-            + getName(): String
+            + getType(): ChargingType
+            + fromEnum(type: ChargingType): ChargingStrategy {static}
         }
 
-        class FastChargeStrategy {
-            + calculateCost(...): double
+        class FastChargingStrategy {
+            - HEAT_PER_TICK: double = 8.0 {static} 
+            
+            + calculateCost(kwh: double, station: ChargingStation, driver: Driver): double
             + getHeatIncrement(): double
+            + getType(): ChargingType
         }
 
-        class EcoChargeStrategy {
-            + calculateCost(...): double
+        class EcoChargingStrategy {
+            - HEAT_PER_TICK: double = 4.0 {static} 
+            + calculateCost(kwh: double, station: ChargingStation, driver: Driver): double
             + getHeatIncrement(): double
+            + getType(): ChargingType
         }
     }
 
-    package "services" as PKG_SERVICES #FFFFFF {
+    package "services" as PKG_SERVICES #F0F4F8 {
 
         class SessionService <<Service>> {
-            - sessionDao: SessionDao
-            - transactionDao: TransactionDao
+            - daoFactory: DaoFactory
             __
             + openSession(...): ChargingSession
             + addTick(session: ChargingSession, strategy: ChargingStrategy): void
             + closeSession(session: ChargingSession): Transaction
             + forceClose(session: ChargingSession): Transaction
             + getActiveSessions(): List<ChargingSession>
+            + countSessionsByOperator(operator: StationOperator): int
+            + calculateTotalEnergySoldByOperator(operator: StationOperator): double
+            + getSessionHistoryByDriver(driver: Driver): List<ChargingSession>
+            + getActiveSessionForDriver(driver: Driver): ChargingSession
+            + getSessionById(sessionId: Long): ChargingSession
         }
 
         class LoadBalancerService <<Observer>> {
             - sessionService: SessionService
-            - stationDao: StationDao
+            - daoFactory: DaoFactory          
             __
-            + update(src: Subject, event: TransformerEvent): void
+           
+            + update(source: Subject, event: TransformerEvent): void
             - handleThermalAlert(transformer: PowerTransformer): void
             - handleCoolingComplete(transformer: PowerTransformer): void
+
         }
 
         class StationService <<Service>> {
-            - stationDao: StationDao
-            __
-            + registerStation(...): void
+             - daoFactory: DaoFactory
+             __
+            + registerStation(operator: StationOperator, transformer: PowerTransformer, ...): ChargingStation
+            + registerStation(operator: StationOperator, name: String, ...): ChargingStation
             + hold(driver: Driver, station: ChargingStation): void
             + cancelHold(driver: Driver, station: ChargingStation): void
             + expireHolds(): void
             + findNearestAvailable(driver: Driver): List<ChargingStation>
+            + getStationsByOperator(operator: StationOperator): List<ChargingStation>
+            + getAllStations(): List<ChargingStation>
+            + getOverloadedStations(): List<ChargingStation>
+            + getPendingStations(): List<ChargingStation>
+            - findBestTransformer(connection: Connection): PowerTransformer
+        }
+
+        class DriverService <<Service>> {
+            - daoFactory: DaoFactory
+            --
+            + updateDriverLocation(driver: Driver, newLat: double, newLng: double): void
         }
 
         class AuthService <<Service>> {
-            - userDao: UserDao
+            - daoFactory: DaoFactory
+            - currentUser: User
             __
             + register(...): User
-            + login(...): User
+            + registerDriver(...): Driver
+            + login(email: String, rawPassword: String): User
             + logout(): void
+            + refreshUser(userId: Long): User
         }
 
         class ValidationService <<Service>> {
-            - stationDao: StationDao
+            - daoFactory: DaoFactory
             __
-            + testStation(station: ChargingStation): boolean
-            + approve(station: ChargingStation, platformTariff: double): void
+            + approve(station: ChargingStation, platformTariff: BigDecimal): void
             + reject(station: ChargingStation, motivation: String): void
         }
 
         class RatingService <<Service>> {
-            - ratingDao: RatingDao
-            - ratingAlertDao: RatingAlertDao
+            - daoFactory: DaoFactory
             __
             + leaveRating(...): Rating
             + checkRatingAlerts(): void
-            - checkRatingAlert(station: ChargingStation): void
+            + getPendingAlerts(): List<RatingAlert>
+            + suspendStationFromAlert(alert: RatingAlert, notes: String): void
+            + dismissAlert(alert: RatingAlert, notes: String): void
+            - checkRatingAlert(connection: Connection, station: ChargingStation): void
         }
 
         class WalletService <<Service>> {
-            - userDao: UserDao
-            - transactionDao: TransactionDao
+            - daoFactory: DaoFactory
             __
-            + fundWallet(driver: Driver, amount: double): Transaction
+            + fundWallet(driver: Driver, amount: BigDecimal): Transaction
             + changePlan(driver: Driver, plan: SubscriptionPlan): Transaction
         }
     }
@@ -159,61 +188,75 @@ package "business" as PKG_BUSINESS #FFFFFF {
 ' ==========================================
 '  DAO LAYER (Riferimento Esterno)
 ' ==========================================
-package "dao.interfaces" as PKG_DAO #FFFFFF {
-    Interface GenericDao<T> <<interface>> {
-        + save(entity: T): void
-        + findById(id: int): T
-        + findAll(): List<T>
-        + update(entity: T): void
-        + delete(id: int): void
+package "dao.interfaces" as PKG_DAO #d3f4d7 {
+    Interface DaoFactory<<interface>> {
+      + createSessionDao(connection: Connection): SessionDao
+      + createStationDao(connection: Connection): StationDao
+      + createUserDao(connection: Connection): UserDao
+      + createTransactionDao(connection: Connection): TransactionDao
+      + createRatingDao(connection: Connection): RatingDao
+      + createRatingAlertDao(connection: Connection): RatingAlertDao
+      + createTransformerDao(connection: Connection): TransformerDao
     }
 }
 
-' ══════════════════════════════════════════════
-'  POSIZIONAMENTO (Layout)
-' ══════════════════════════════════════════════
-PKG_DOMAIN -[hidden]down- PKG_BUSINESS
-PKG_BUSINESS -[hidden]down- PKG_DAO
+' ==========================================
+' POSIZIONAMENTO (Layout Architetturale)
+' ==========================================
 
-GridMonitor -[hidden]right- GridCluster
-GridCluster -[hidden]down- SessionService
+' 1. Struttura a "Hamburger": Domain in alto, Business al centro, DAO in basso
+PKG_DOMAIN -[hidden]down-> PKG_BUSINESS
+PKG_BUSINESS -[hidden]down-> PKG_DAO
 
-AuthService -[hidden]right- StationService
-ValidationService -[hidden]right- RatingService
-WalletService -[hidden]right- SessionService
+' 2. Layout interno al Business: Core e Strategies sopra, Services sotto
+PKG_CORE -[hidden]right-> PKG_STRATEGIES
+PKG_CORE -[hidden]down-> PKG_SERVICES
+PKG_STRATEGIES -[hidden]down-> PKG_SERVICES
 
-' ══════════════════════════════════════════════
-'  RELAZIONI CORE & PATTERNS
-' ══════════════════════════════════════════════
+' 3. Compattiamo i Services in due colonne verticali forzate
+AuthService -[hidden]down-> DriverService
+DriverService -[hidden]down-> ValidationService
+ValidationService -[hidden]down-> WalletService
 
-PKG_SERVICES ..> PKG_DOMAIN : <<manipulates>>
+StationService -[hidden]down-> SessionService
+SessionService -[hidden]down-> RatingService
+RatingService -[hidden]down-> LoadBalancerService
+
+' ==========================================
+' RELAZIONI CORE & PATTERNS
+' ==========================================
+
+' Frecce globali verso l'alto (Domain) e verso il basso (DAO)
+PKG_SERVICES -up.> PKG_DOMAIN : <<manipulates>>
+PKG_SERVICES -down-> PKG_DAO : <<injected DAOs>>
 
 ' --- PATTERN OBSERVER ---
 PowerTransformer .up.|> Subject : <<implements>>
 LoadBalancerService .up.|> Observer : <<implements>>
 Subject "1" -down-> "*" Observer : notifies >
-LoadBalancerService --> PowerTransformer : observes >
-LoadBalancerService --> TransformerEvent : receives >
+
+' Forziamo l'Observer a puntare in su, verso il blocco Domain
+LoadBalancerService -up-> PowerTransformer : observes >
+LoadBalancerService -up-> TransformerEvent : receives >
 
 ' --- PATTERN STRATEGY ---
-SessionService --> ChargingStrategy : <<uses>>
-ChargingStrategy <|.. FastChargeStrategy
-ChargingStrategy <|.. EcoChargeStrategy
+' Usiamo -up-> per mandarlo verso il pacchetto Strategies che ora sta in alto
+SessionService -up-> ChargingStrategy : <<uses>>
+ChargingStrategy <|.. FastChargingStrategy
+ChargingStrategy <|.. EcoChargingStrategy
 
 ' --- ORCHESTRAZIONE DAEMON ---
-GridMonitor --> SessionService : tick/billing >
-GridMonitor --> StationService : expire holds >
-GridMonitor --> RatingService : check alerts >
-GridMonitor --> GridCluster : queries >
+' Frecce dirette verso i service in basso
+GridMonitor -down-> SessionService : tick/billing >
+GridMonitor -down-> StationService : expire holds >
+GridMonitor -down-> RatingService : check alerts >
+GridMonitor -right-> GridCluster : queries >
 
-' --- DEPENDENCY INVERSION (Business -> DAO) ---
-' Freccia generica per non incasinare il diagramma con 20 frecce verso i singoli DAO
-PKG_SERVICES ..> PKG_DAO : <<injected DAOs>>
+LoadBalancerService --> SessionService
 
-' ══════════════════════════════════════════════
-'  NOTE ARCHITETTURALI
-' ══════════════════════════════════════════════
-
+' ==========================================
+' NOTE ARCHITETTURALI
+' ==========================================
 note left of PKG_SERVICES
   <b>Architectural Rule:</b>
   Tutti i Service orchestrano il Domain Model
@@ -223,9 +266,10 @@ end note
 
 note top of GridMonitor
   <b>Thread Safety:</b>
-  Il Monitor delega le operazioni 
-  ai Service, che applicano lock 
+  Il Monitor delega le operazioni
+  ai Service, che applicano lock
   sul database (ACID).
 end note
+@enduml
 
 @enduml
