@@ -64,7 +64,7 @@ La registrazione raccoglie i dati del nuovo account e il ruolo desiderato. Il fl
 \subsection{Area Driver}
 
 \subsubsection{Menu del Driver}
-È il contenitore della dashboard del Driver: mostra il saldo del portafoglio e la posizione corrente, e dà accesso alle altre schermate. Se una ricarica è ancora in corso, compare una card \textit{Resume} che riporta alla sessione attiva: la ricarica infatti prosegue anche se il Driver esce dalla schermata, perché ad avanzarla è il \texttt{GridMonitor} in background e non l'interfaccia.
+È il contenitore della dashboard del Driver: mostra il saldo del portafoglio e dà accesso alle quattro schermate della sua area (esplorazione delle colonnine, ricarica del portafoglio, storico e profilo). Il pulsante \textit{Update Location} simula una nuova lettura GPS e ne persiste il risultato, così da riordinare le colonnine per vicinanza. Se una ricarica è ancora in corso, compare inoltre una card \textit{Resume} che riporta alla sessione attiva: la ricarica infatti prosegue anche quando il Driver esce dalla schermata, perché ad avanzarla è il \texttt{GridMonitor} in background e non l'interfaccia.
 
 \begin{figure}[H]
     \centering
@@ -104,7 +104,7 @@ La schermata permette di aggiungere fondi al portafoglio, scegliendo uno degli i
 \end{figure}
 
 \subsubsection{Storico delle ricariche}
-Elenca le sessioni concluse del Driver, con data, energia erogata e costo. Da qui è possibile valutare \emph{a posteriori} una ricarica, nel caso in cui il Driver abbia saltato la finestra di valutazione mostrata al termine della sessione.
+Elenca le sessioni concluse del Driver, ciascuna con data, energia erogata e costo, e ne riporta i totali: spesa complessiva ed energia totale prelevata. La valutazione di una ricarica non avviene qui, ma nella finestra proposta al Driver al termine della sessione.
 
 \begin{figure}[H]
     \centering
@@ -114,7 +114,7 @@ Elenca le sessioni concluse del Driver, con data, energia erogata e costo. Da qu
 \end{figure}
 
 \subsubsection{Profilo e abbonamento}
-Mostra i dati del profilo e permette di cambiare il piano di abbonamento (BASIC, PLUS, PREMIUM), che determina lo sconto applicato alla quota di tariffa trattenuta dalla piattaforma. Il passaggio a un piano superiore addebita la sola differenza di canone rispetto al piano corrente, mentre i passaggi a un piano inferiore sono bloccati.
+Riporta il saldo del portafoglio e i dati del veicolo (tipo di connettore e capacità della batteria, in sola lettura), e permette di cambiare il piano di abbonamento. I tre piani sono presentati con il rispettivo canone mensile e con lo sconto che ciascuno garantisce: come mostra la figura, lo sconto si applica \emph{esclusivamente alla quota di tariffa trattenuta dalla piattaforma} (0\% per BASIC, 15\% per PLUS, 30\% per PREMIUM), mai alla quota dell'operatore. Il passaggio a un piano superiore addebita la sola differenza di canone rispetto al piano corrente, mentre i passaggi a un piano inferiore sono bloccati; il pulsante di conferma resta disabilitato finché il Driver non seleziona un piano diverso da quello attivo.
 
 \begin{figure}[H]
     \centering

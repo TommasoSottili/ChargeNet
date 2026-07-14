@@ -10,6 +10,10 @@ I test sono eseguiti su due livelli:
     \item \textbf{Livello 2 — Persistence Layer}: i DAO Postgres, testati contro un database H2 reale in modalità \texttt{MODE=PostgreSQL}, per verificare che le query SQL scritte a mano funzionino davvero e non solo che le interazioni tra oggetti siano quelle attese.
 \end{itemize}
 
+In tutto la suite conta \textbf{121 test}, tutti verdi.
+
+Vale la pena dire anche cosa \emph{non} abbiamo testato, perché il confine è una scelta e non una dimenticanza. \textbf{Non ci sono test sui Controller né sull'interfaccia grafica.} Testare JavaFX richiede di far partire il toolkit e di simulare i click, con un costo alto e un guadagno basso: i Controller, per come li abbiamo scritti, non contengono logica di dominio: leggono l'azione dell'utente, chiamano un Service e mostrano il risultato. La logica che può davvero sbagliare i conti sta nei Service e nel dominio, ed è lì che abbiamo concentrato i test.
+
 \subsection{Tecnologie e Strumenti}
 
 \begin{itemize}
@@ -87,9 +91,11 @@ assertEquals("Lontano", nearest.get(1).getName(), "La seconda deve essere quella
 \end{minipage}
 \vspace{0.3cm}
 
-\subsection{Service e gestione transazionale : \texttt{DriverServiceTest}, \texttt{LoadBalancerServiceTest}}
+\subsection{La tecnica: intercettare la transazione — \texttt{DriverServiceTest}}
 
-I Service che scrivono sul database aprono e chiudono esplicitamente una transazione JDBC (\texttt{setAutoCommit(false)}, poi \texttt{commit()} o \texttt{rollback()} in caso di errore, sempre seguito da \texttt{close()}). Testare questo comportamento richiede di intercettare la connessione prima che il Service la apra davvero — ed è qui che entra in gioco il mock statico:
+I Service che scrivono sul database aprono e chiudono la transazione da soli (\texttt{setAutoCommit(false)}, poi \texttt{commit()} oppure \texttt{rollback()} se qualcosa va storto, e in ogni caso \texttt{close()}). Per testare questo comportamento dobbiamo mettere le mani sulla connessione prima che il Service la apra davvero: da qui il mock statico.
+
+Usiamo come esempio \texttt{DriverServiceTest}, cioè il servizio più semplice che abbiamo: sposta la posizione di un Driver e la salva, nient'altro. Proprio perché non fa altro, mostra la tecnica senza rumore attorno. I test che contano davvero sono quelli dei due paragrafi successivi, e usano tutti questo stesso schema.
 
 \vspace{0.3cm}
 \noindent\begin{minipage}{\linewidth}
@@ -154,39 +160,7 @@ void testUpdateDriverLocation_Failure() throws SQLException {
 \end{minipage}
 \vspace{0.3cm}
 
-Questa coppia di test è particolarmente significativa perché non si limita a verificare "il metodo non lancia errori": verifica che, in caso di eccezione, il sistema non lasci una transazione a metà — un dettaglio che un test puramente Black-Box (solo sul valore di ritorno) non potrebbe cogliere.
-
-\texttt{LoadBalancerServiceTest} applica la stessa tecnica ma ne combina due insieme, mockando sia \texttt{DatabaseManager} sia il Singleton \texttt{GridCluster} nello stesso test, per isolare completamente la reazione a un evento \texttt{THERMAL\_ALERT}:
-
-\vspace{0.3cm}
-\noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java, caption=Doppio mock statico: connessione JDBC e Singleton GridCluster.]
-mockedDbManagerStatic = mockStatic(DatabaseManager.class);
-mockedDbManagerStatic.when(DatabaseManager::getConnection).thenReturn(connectionMock);
-
-gridClusterMock = mock(GridCluster.class);
-mockedGridClusterStatic = mockStatic(GridCluster.class);
-mockedGridClusterStatic.when(GridCluster::getInstance).thenReturn(gridClusterMock);
-\end{lstlisting}
-\end{minipage}
-\vspace{0.3cm}
-
-Il test sul \texttt{THERMAL\_ALERT} verifica in un colpo solo tre effetti attesi del pattern Observer descritto nel Capitolo~\ref{ch:pattern}: che la colonnina venga marcata come sovraccarica, che la modifica sia persistita, e che la chiusura delle sessioni attive sia \emph{delegata} a \texttt{SessionService} invece di essere gestita internamente:
-
-\vspace{0.3cm}
-\noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java]
-loadBalancerService.update(transformerMock, TransformerEvent.THERMAL_ALERT);
-
-verify(stationMock, times(1)).setOverloaded();
-verify(stationDaoMock, times(1)).update(stationMock);
-verify(connectionMock, times(1)).commit();
-verify(sessionServiceMock, times(1)).forceClose(sessionMock);
-\end{lstlisting}
-\end{minipage}
-\vspace{0.3cm}
-
-L'ultima riga è la più importante: verifica che \texttt{LoadBalancerService} non sappia \emph{come} si chiude una sessione (rimborso, aggiornamento wallet), sappia solo \emph{che} va chiusa — la stessa separazione di responsabilità già discussa a proposito di \texttt{LoadBalancerService} nel capitolo sul Business Layer.
+La coppia di test non verifica solo che "il metodo non esplode": verifica che, se qualcosa va storto, il sistema non lasci una transazione aperta a metà. Un test che guardasse solo il valore di ritorno non se ne accorgerebbe.
 
 \subsection{Il cuore economico: \texttt{SessionServiceTest}}
 
@@ -252,9 +226,47 @@ verify(connectionMock, times(1)).rollback();       // e la transazione viene chi
 
 Le tre \texttt{verify} finali sono il vero contenuto del test, e verificano tre proprietà distinte: che l'oggetto in memoria non venga sporcato con una prenotazione che il database ha rifiutato (altrimenti memoria e DB divergerebbero), che nulla venga confermato, e che la transazione venga esplicitamente annullata invece di essere semplicemente abbandonata. Il test speculare (\texttt{testHold\_Success}) verifica il percorso opposto sulla stessa transazione.
 
+\subsection{L'emergenza termica: \texttt{LoadBalancerServiceTest}}
+
+Qui i mock statici diventano due: oltre a \texttt{DatabaseManager} va sostituito anche il Singleton \texttt{GridCluster}, altrimenti il test andrebbe a leggere la cache vera della rete.
+
+\vspace{0.3cm}
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[language=Java, caption=Doppio mock statico: connessione JDBC e Singleton GridCluster.]
+mockedDbManagerStatic = mockStatic(DatabaseManager.class);
+mockedDbManagerStatic.when(DatabaseManager::getConnection).thenReturn(connectionMock);
+
+gridClusterMock = mock(GridCluster.class);
+mockedGridClusterStatic = mockStatic(GridCluster.class);
+mockedGridClusterStatic.when(GridCluster::getInstance).thenReturn(gridClusterMock);
+\end{lstlisting}
+\end{minipage}
+\vspace{0.3cm}
+
+Il test lancia l'evento \texttt{THERMAL\_ALERT} e controlla tre cose in un colpo solo: che la colonnina venga messa in sovraccarico, che la modifica finisca davvero nel database, e che la chiusura della sessione venga \emph{delegata} al \texttt{SessionService}.
+
+\vspace{0.3cm}
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[language=Java]
+loadBalancerService.update(transformerMock, TransformerEvent.THERMAL_ALERT);
+
+verify(stationMock, times(1)).setOverloaded();
+verify(stationDaoMock, times(1)).update(stationMock);
+verify(connectionMock, times(1)).commit();
+verify(sessionServiceMock, times(1)).forceClose(sessionMock);
+\end{lstlisting}
+\end{minipage}
+\vspace{0.3cm}
+
+L'ultima riga è quella che conta: il \texttt{LoadBalancerService} non sa \emph{come} si chiude una sessione (rimborso, wallet, ricevuta), sa solo \emph{che} va chiusa. È il punto dell'Observer descritto nel Capitolo~\ref{ch:pattern}, verificato da un test invece che affermato a parole.
+
 \section{Livello 2: Persistence Layer (DAO)}
 
-I test dei DAO non usano mock: interrogano un database H2 reale, inizializzato ad ogni classe di test con lo stesso \texttt{scheme.sql} usato in produzione.
+I test dei DAO non usano mock: interrogano un database vero, creato all'avvio della classe di test con lo stesso \texttt{scheme.sql} della produzione. Le query vengono quindi eseguite davvero, contro le tabelle e i vincoli reali, non contro un'imitazione.
+
+C'è però un limite che va detto subito, perché è la prima cosa che salta all'occhio: in produzione i DAO parlano con \textbf{PostgreSQL}, mentre questi test girano su \textbf{H2}. Anche in modalità \texttt{MODE=PostgreSQL}, H2 resta un motore diverso: la sintassi che accetta è quasi la stessa, ma non è garantito che lo siano tutti i comportamenti ai bordi (conversioni di tipo, ordinamenti, messaggi d'errore). Un test verde su H2 non è quindi la prova assoluta che la stessa query passi su Postgres.
+
+È un compromesso preso in modo consapevole: H2 gira in memoria, parte in un istante e non richiede di avere un server Postgres acceso per lanciare i test. In cambio si rinuncia a testare il motore di produzione. Ci siamo tenuti stretti su una cosa, però: lo schema caricato è lo \emph{stesso file} usato in produzione, quindi se una query rompesse un vincolo o sbagliasse un nome di colonna, il test se ne accorgerebbe comunque.
 
 \vspace{0.3cm}
 \noindent\begin{minipage}{\linewidth}
