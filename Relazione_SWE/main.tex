@@ -27,6 +27,15 @@
     frame=single,
     rulecolor=\color{black!30}
 }
+
+% Stile per i listati dei test: numerazione delle righe come nei code snippet
+\lstdefinestyle{testcode}{
+    numbers=left,
+    numberstyle=\tiny\color{black!45},
+    numbersep=8pt,
+    xleftmargin=2.2em,
+    captionpos=t
+}
 \begin{document}
 
 \begin{titlepage}
@@ -84,6 +93,5 @@
 \input{capitoli/2_progettazione}
 \input{capitoli/3_implementazione}
 \input{capitoli/4_testing}
-\input{capitoli/5_demo}
 
 \end{document}

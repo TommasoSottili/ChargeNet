@@ -6,31 +6,193 @@
 I test sono eseguiti su due livelli:
 
 \begin{itemize}
-    \item \textbf{Livello 1 -- Business Logic}: Service, componenti \texttt{core} (\texttt{GridCluster}, \texttt{GridMonitor}) e Strategy, testati isolando ogni dipendenza esterna con Mockito.
-    \item \textbf{Livello 2 — Persistence Layer}: i DAO Postgres, testati contro un database H2 reale in modalità \texttt{MODE=PostgreSQL}, per verificare che le query SQL scritte a mano funzionino davvero e non solo che le interazioni tra oggetti siano quelle attese.
+    \item \textbf{Livello 1 -- Business Logic}: service, componenti \texttt{core} (\texttt{GridCluster}, \texttt{GridMonitor}) e strategy, testati isolando ogni dipendenza esterna con Mockito.
+    \item \textbf{Livello 2 — Persistence Layer}: i DAO Postgres, testati utilizzando un database H2 reale in modalità \texttt{MODE=PostgreSQL}, per verificare che le query SQL scritte a mano funzionino davvero e non solo che le interazioni tra oggetti siano quelle attese.
 \end{itemize}
 
-In tutto la suite conta \textbf{121 test}, tutti verdi.
-
-Vale la pena dire anche cosa \emph{non} abbiamo testato, perché il confine è una scelta e non una dimenticanza. \textbf{Non ci sono test sui Controller né sull'interfaccia grafica.} Testare JavaFX richiede di far partire il toolkit e di simulare i click, con un costo alto e un guadagno basso: i Controller, per come li abbiamo scritti, non contengono logica di dominio: leggono l'azione dell'utente, chiamano un Service e mostrano il risultato. La logica che può davvero sbagliare i conti sta nei Service e nel dominio, ed è lì che abbiamo concentrato i test.
+\textbf{Non ci sono test sui Controller né sull'interfaccia grafica.} I Controller, per come li abbiamo scritti, non contengono logica di dominio: leggono l'azione dell'utente, chiamano un Service e mostrano il risultato. La logica che può davvero sbagliare i conti sta nei Service e nel dominio, ed è lì che abbiamo concentrato i test.
 
 \subsection{Tecnologie e Strumenti}
 
 \begin{itemize}
     \item \textbf{JUnit 5}: framework di esecuzione, con le annotazioni \texttt{@BeforeEach}/\texttt{@AfterEach} per il setup e cleanup di ogni test e \texttt{@BeforeAll}/\texttt{@AfterAll} per le risorse costose (come la connessione H2) condivise da un'intera classe.
-    \item \textbf{Mockito}: usato non solo per mockare interfacce (\texttt{StationDao}, \texttt{SessionService}, \dots) ma anche per mockare \textbf{metodi statici} tramite \texttt{Mockito.mockStatic()} — una necessità specifica di questo progetto, perché sia \texttt{DatabaseManager.getConnection()} sia \texttt{GridCluster.getInstance()} sono chiamate statiche che altrimenti aprirebbero una connessione reale o toccherebbero lo stato globale del Singleton durante un test unitario.
-    \item \textbf{H2 in modalità \texttt{MODE=PostgreSQL}}: usato esclusivamente nei test dei DAO, con lo schema reale caricato all'avvio tramite \texttt{INIT=RUNSCRIPT FROM './src/main/resources/scheme.sql'} — lo stesso file \texttt{scheme.sql} usato in produzione, quindi i test verificano le query contro la struttura di tabelle reale, non una sua approssimazione.
+    \item \textbf{Mockito}: isola la classe sotto test sostituendone le dipendenze con oggetti finti, i \textit{mock}, che il test programma per rispondere come vuole; l'esito dipende così dalla sola logica della classe in esame. Oltre alle interfacce, è stato utilizzato anche per le \textbf{chiamate statiche}, con \texttt{Mockito.mockStatic()}: senza di esso \texttt{DatabaseManager.getConnection()} aprirebbe una connessione reale al database e \texttt{GridCluster.getInstance()} restituirebbe il Singleton condiviso da tutta l'applicazione, legando il test a uno stato globale.
+    \item \textbf{H2 in modalità \texttt{MODE=PostgreSQL}}: usato esclusivamente nei test dei DAO, con lo schema reale caricato all'avvio — lo stesso schema \texttt{scheme.sql} usato in produzione. Quindi i test verificano le query sulle tabelle reali, non su una loro approssimazione.
 \end{itemize}
 
 \section{Livello 1: Business Logic}
 
-\subsection{Logica pura, senza mock — \texttt{ChargingStrategiesTest}}
+\subsection{\texttt{SessionServiceTest}}
 
-Le strategie di ricarica (\texttt{FastChargingStrategy}, \texttt{EcoChargingStrategy}) hanno stesso input, stesso output e nessuna dipendenza esterna. Per questo motivo il loro test non usa Mockito: costruisce oggetti di dominio reali con \texttt{reconstitute()} e confronta il risultato con un secondo calcolo indipendente, scritto direttamente nel test:
+In questa classe è stato testato il \texttt{SessionService}. In particolare ci siamo concentrati sul ciclo di vita di una sessione, verificando in sequenza i metodi \texttt{openSession()} e \texttt{closeSession()}, compresi i flussi alternativi (come il saldo insufficiente). Il motivo che ci ha portato a scegliere questi test è che il \texttt{SessionService} è l'unico componente che muove denaro: il primo test verifica che una sessione senza copertura economica venga rifiutata dal dominio \emph{prima} di toccare il database, il secondo che alla chiusura allo Station Operator sia accreditata esattamente la sua quota (tariffa operatore $\times$ kWh erogati).
 
 \vspace{0.3cm}
-\noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java]
+\begin{lstlisting}[language=Java, style=testcode, caption={Estratto di codice della classe \texttt{SessionServiceTest}}]
+@Test
+void testOpenSession_InsufficientFunds_ThrowsException() {
+    Driver poorDriver = testDriver(1L, "Povero", "p@test.com", SubscriptionPlan.BASIC);
+    ChargingStation station = ChargingStation.reconstitute(
+            1L, null, null, "Stazione", null, 43.77, 11.25, ConnectorType.TYPE_2,
+            50.0, false, new BigDecimal("0.40"), new BigDecimal("0.05"), 0.0, 0,
+            StationStatus.ACTIVE, null, null);
+    ChargingStrategy strategy = ChargingStrategy.fromEnum(ChargingType.FAST);
+
+    InsufficientBalanceException ex = assertThrows(InsufficientBalanceException.class, () ->
+            sessionService.openSession(poorDriver, station, strategy, 20.0)
+    );
+    assertTrue(ex.getMessage().contains("insufficiente"));
+
+    verify(daoFactoryMock, never()).createSessionDao(any());
+}
+
+@Test
+void testCloseSession_CreditsOperator() throws Exception {
+    Driver driver = testDriver(3L, "Test", "t@test.com", SubscriptionPlan.BASIC);
+    driver.refund(new BigDecimal("50.00"));
+
+    StationOperator operatorStub = StationOperator.reconstitute(99L);
+    ChargingStation station = ChargingStation.reconstitute(
+            1L, operatorStub, null, "Stazione", null, 0.0, 0.0, ConnectorType.TYPE_2,
+            50.0, false, new BigDecimal("0.30"), new BigDecimal("0.10"), 0.0, 0,
+            StationStatus.ACTIVE, null, null);
+
+    ChargingSession session = ChargingSession.open(driver, station, ChargingType.FAST, 20.0);
+    session.addTick(10.0, new BigDecimal("5.00"));
+
+    StationOperator fullOperator = mock(StationOperator.class);
+    doReturn(fullOperator).when(userDaoMock).findById(99L);
+
+    sessionService.closeSession(session);
+
+    ArgumentCaptor<BigDecimal> captor = ArgumentCaptor.forClass(BigDecimal.class);
+    verify(fullOperator, times(1)).addEarnings(captor.capture());
+    assertEquals(0, captor.getValue().compareTo(new BigDecimal("3.00")));
+
+    verify(userDaoMock, times(1)).update(fullOperator);
+    verify(connectionMock, times(1)).commit();
+}
+\end{lstlisting}
+\vspace{0.3cm}
+
+\subsection{\texttt{StationServiceTest}}
+
+In questa classe è stato testato lo \texttt{StationService}, concentrandoci sul metodo \texttt{hold()}, cioè la prenotazione temporanea di una colonnina. Abbiamo scelto questi due test perché sono speculari e coprono la situazione più delicata del sistema: due Driver che prenotano la stessa colonnina nello stesso istante. La difesa contro la corsa è un \texttt{UPDATE} condizionale sul database, e i test verificano entrambi gli esiti — chi vince ottiene la prenotazione e il \texttt{commit}, chi perde riceve un'eccezione, non sporca l'oggetto in memoria e chiude la transazione con un \texttt{rollback}.
+
+\vspace{0.3cm}
+\begin{lstlisting}[language=Java, style=testcode, caption={Estratto di codice della classe \texttt{StationServiceTest}}]
+@Test
+void testHold_Success() throws SQLException {
+    Driver mockDriver = mock(Driver.class);
+    when(mockDriver.getId()).thenReturn(1L);
+
+    ChargingStation mockStation = mock(ChargingStation.class);
+    when(mockStation.getId()).thenReturn(100L);
+
+    // Il database da' il via libera all'update atomico
+    when(stationDaoMock.acquireAtomicHold(100L, 1L)).thenReturn(true);
+
+    stationService.hold(mockDriver, mockStation);
+
+    verify(mockStation, times(1)).setReserved(mockDriver);
+    verify(connectionMock, times(1)).setAutoCommit(false);
+    verify(connectionMock, times(1)).commit();
+}
+
+@Test
+void testHold_StationNotAvailable() throws SQLException {
+    Driver mockDriver = mock(Driver.class);
+    when(mockDriver.getId()).thenReturn(1L);
+
+    ChargingStation mockStation = mock(ChargingStation.class);
+    when(mockStation.getId()).thenReturn(100L);
+
+    // Qualcun altro ha gia' preso la colonnina: il DAO restituisce false
+    when(stationDaoMock.acquireAtomicHold(100L, 1L)).thenReturn(false);
+
+    StationNotAvailableException exception = assertThrows(StationNotAvailableException.class, () ->
+            stationService.hold(mockDriver, mockStation));
+
+    verify(mockStation, never()).setReserved(any());
+    verify(connectionMock, never()).commit();
+    verify(connectionMock, times(1)).rollback();
+}
+\end{lstlisting}
+\vspace{0.3cm}
+
+\subsection{\texttt{GridMonitorTest}}
+
+In questa classe è stato testato il \texttt{GridMonitor}, il thread \textit{daemon} che ogni 5 secondi fa avanzare la simulazione. È il componente che agisce di propria iniziativa, quindi il test invoca direttamente un singolo ciclo (\texttt{onTick()}) e ne verifica i due effetti: le deleghe ai servizi (scadenza delle prenotazioni, avanzamento delle sessioni, controllo di qualità) e l'impatto fisico sul dominio, cioè il calore accumulato sul trasformatore. Per osservare la temperatura il trasformatore è un oggetto \textbf{reale}, non un mock.
+
+\vspace{0.3cm}
+\begin{lstlisting}[language=Java, style=testcode, caption={Estratto di codice della classe \texttt{GridMonitorTest}}]
+@Test
+void testOnTickDelegationsAndHeatSimulation() throws Exception {
+    // Trasformatore REALE (non un mock): solo cosi' possiamo osservarne la temperatura
+    PowerTransformer spyTransformer = PowerTransformer.reconstitute(1L, "Spy", 20.0, 0.0);
+    when(tDao.findAll()).thenReturn(Collections.singletonList(spyTransformer));
+    when(sDao.findAll()).thenReturn(new ArrayList<>());
+    GridCluster.getInstance().init(tDao, sDao);
+
+    ChargingSession activeSession = ChargingSession.reconstitute(100L, null, mockStation,
+            ChargingType.FAST, 20.0, 20.0, 0.0, BigDecimal.ZERO,
+            SessionStatus.ACTIVE, LocalDateTime.now(), null);
+    when(sessionServiceMock.getActiveSessions()).thenReturn(List.of(activeSession));
+
+    // onTick() e' privato: lo invochiamo via reflection per simulare un ciclo
+    Method onTickMethod = GridMonitor.class.getDeclaredMethod("onTick");
+    onTickMethod.setAccessible(true);
+    onTickMethod.invoke(gridMonitor);
+
+    verify(stationServiceMock, times(1)).expireHolds();
+    verify(ratingServiceMock, times(1)).checkRatingAlerts();
+    verify(sessionServiceMock, times(1)).addTick(eq(activeSession), any());
+
+    assertTrue(spyTransformer.getTemperature() > 20.0,
+            "La temperatura deve essere salita per effetto della sessione attiva");
+}
+\end{lstlisting}
+\vspace{0.3cm}
+
+\subsection{\texttt{LoadBalancerServiceTest}}
+
+In questa classe è stato testato il \texttt{LoadBalancerService}, l'\textit{observer} che reagisce agli eventi emessi dai trasformatori. Abbiamo scelto i due test che coprono l'emergenza termica e il ritorno alla normalità: all'evento \texttt{THERMAL\_ALERT} tutte le colonnine del ramo devono passare in sovraccarico e le sessioni in corso devono essere chiuse; all'evento \texttt{COOLING\_COMPLETE} le sole colonnine rimaste \texttt{OVERLOADED} devono tornare attive. Il test verifica anche che la chiusura della sessione sia \emph{delegata} al \texttt{SessionService} e non reimplementata qui.
+
+\vspace{0.3cm}
+\begin{lstlisting}[language=Java, style=testcode, caption={Estratto di codice della classe \texttt{LoadBalancerServiceTest}}]
+@Test
+void testUpdate_ThermalAlert_ClosesSessionsAndOverloadsStations() throws Exception {
+    PowerTransformer transformerMock = mock(PowerTransformer.class);
+    doReturn(100L).when(transformerMock).getId();
+
+    ChargingStation stationMock = mock(ChargingStation.class);
+    doReturn(10L).when(stationMock).getId();
+
+    ChargingSession sessionMock = mock(ChargingSession.class);
+    doReturn(stationMock).when(sessionMock).getStation();
+
+    doReturn(Collections.singletonList(stationMock))
+            .when(gridClusterMock).getStationsForTransformer(100L);
+    doReturn(Collections.singletonList(sessionMock))
+            .when(sessionServiceMock).getActiveSessions();
+
+    loadBalancerService.update(transformerMock, TransformerEvent.THERMAL_ALERT);
+
+    verify(stationMock, times(1)).setOverloaded();
+    verify(stationDaoMock, times(1)).update(stationMock);
+    verify(connectionMock, times(1)).commit();
+
+    // La chiusura non e' reimplementata qui: e' delegata al SessionService
+    verify(sessionServiceMock, times(1)).forceClose(sessionMock);
+}
+\end{lstlisting}
+\vspace{0.3cm}
+
+\subsection{\texttt{ChargingStrategiesTest}}
+
+In questa classe sono state testate le due strategie di ricarica. Non avendo dipendenze esterne, il test non usa mock ma costruisce oggetti di dominio reali. Abbiamo scelto questo test perché verifica la regola tariffaria più facile da sbagliare: lo sconto dell'abbonamento deve essere applicato solo alla quota della piattaforma, mai su quella dell'operatore, e solo dopo si applica l'ulteriore sconto del 10\% in caso venga scelta la modalità Eco.
+
+\vspace{0.3cm}
+\begin{lstlisting}[language=Java, style=testcode, caption={Estratto di codice della classe \texttt{ChargingStrategiesTest}}]
 private double basePrice(double kwh, SubscriptionPlan plan) {
     double discount = (plan != null) ? plan.getDiscount() : 0.0;
     BigDecimal platAfter = TARIFF_PLAT.multiply(BigDecimal.ONE.subtract(BigDecimal.valueOf(discount)));
@@ -43,263 +205,96 @@ void testEcoCalculateCostWithSubscriptionDiscount() {
     double kwh = 100.0;
     Driver premiumDriver = testDriver(3L, "Anna", "anna@test.com", SubscriptionPlan.PREMIUM);
     double expectedPremium = round2(basePrice(kwh, SubscriptionPlan.PREMIUM) * 0.90);
+
     assertEquals(expectedPremium, ecoStrategy.calculateCost(kwh, mockStation, premiumDriver), 0.001,
             "PREMIUM: sconto piano sulla sola quota piattaforma, poi Eco 10%");
 }
 \end{lstlisting}
-\end{minipage}
 \vspace{0.3cm}
-
-Riscrivere la formula nel test invece di limitarsi a un valore atteso hardcoded (es. \texttt{assertEquals(33.30, ...)}) ha un vantaggio: se le tariffe di test cambiano, il valore atteso si ricalcola automaticamente insieme a esse, e il test continua a verificare la \emph{relazione} tra i numeri (lo sconto si applica solo alla quota piattaforma) invece di un singolo numero fisso che potrebbe diventare scorrelato dalla logica reale.
-
-Va però riconosciuto il rovescio della medaglia, perché è un'obiezione legittima: duplicando la formula di produzione dentro l'oracolo del test, un errore \emph{sistematico} nella formula verrebbe copiato in entrambe le copie e il test passerebbe lo stesso. Un oracolo scritto ricalcolando la stessa logica non può, da solo, dimostrarne la correttezza. La scelta resta comunque difendibile, a patto di essere chiari su cosa questi test verificano davvero: non il valore assoluto del prezzo, ma l'\textbf{invariante di dominio} che quel valore deve rispettare, cioè che lo sconto dell'abbonamento morda \emph{solo} sulla quota della piattaforma e mai su quella dell'operatore. Non a caso l'oracolo non ricopia \texttt{priceFor()} riga per riga: ricostruisce il prezzo a partire dalle due componenti separate, e sarebbe quindi il primo a cadere se qualcuno, in produzione, applicasse per errore lo sconto anche alla quota dell'operatore.
-
-Questa regola merita una precisazione, perché nel codice convivono due sconti diversi. Lo sconto \emph{dell'abbonamento} si applica alla sola quota piattaforma; lo sconto \emph{della modalità Eco} (un ulteriore 10\%) si applica invece al prezzo base complessivo. Non è un'incoerenza: in entrambi i casi lo sconto è a carico della piattaforma, perché allo Station Operator viene comunque accreditata la sua quota piena sull'energia erogata (paragrafo~\ref{subsec:sessionservice}). È la piattaforma a finanziare le promozioni, non chi possiede la colonnina.
-
-\subsection{Singleton e reset dello stato : \texttt{GridClusterTest}}
-
-\texttt{GridCluster} è un Singleton (Capitolo~\ref{ch:pattern} -- Idiomi e Design Pattern): la sua istanza sopravvive tra un test e l'altro se non viene esplicitamente distrutta, col rischio che i dati caricati da un test "contaminino" il test successivo. La soluzione adottata è azzerare il campo statico \texttt{instance} via reflection prima di ogni test:
-
-\vspace{0.3cm}
-\noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java]
-@BeforeEach
-void setUp() throws Exception {
-    Field instanceField = GridCluster.class.getDeclaredField("instance");
-    instanceField.setAccessible(true);
-    instanceField.set(null, null);
-
-    gridCluster = GridCluster.getInstance();
-    transformerDaoMock = Mockito.mock(TransformerDao.class);
-    stationDaoMock = Mockito.mock(StationDao.class);
-}
-\end{lstlisting}
-\end{minipage}
-\vspace{0.3cm}
-
-Con l'istanza garantita pulita, il test su \texttt{getNearestAvailable()} verifica sia la logica di filtro (solo le colonnine \texttt{ACTIVE}) sia quella di ordinamento (per distanza crescente), usando dati costruiti ad hoc invece di un vero calcolo GPS:
-
-\vspace{0.3cm}
-\noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java]
-List<ChargingStation> nearest = gridCluster.getNearestAvailable(0.0, 0.0);
-
-assertEquals(2, nearest.size(), "Deve escludere le stazioni non ACTIVE");
-assertEquals("Vicino", nearest.get(0).getName(), "La prima deve essere quella geometricamente piu vicina");
-assertEquals("Lontano", nearest.get(1).getName(), "La seconda deve essere quella piu lontana");
-\end{lstlisting}
-\end{minipage}
-\vspace{0.3cm}
-
-\subsection{La tecnica: intercettare la transazione — \texttt{DriverServiceTest}}
-
-I Service che scrivono sul database aprono e chiudono la transazione da soli (\texttt{setAutoCommit(false)}, poi \texttt{commit()} oppure \texttt{rollback()} se qualcosa va storto, e in ogni caso \texttt{close()}). Per testare questo comportamento dobbiamo mettere le mani sulla connessione prima che il Service la apra davvero: da qui il mock statico.
-
-Usiamo come esempio \texttt{DriverServiceTest}, cioè il servizio più semplice che abbiamo: sposta la posizione di un Driver e la salva, nient'altro. Proprio perché non fa altro, mostra la tecnica senza rumore attorno. I test che contano davvero sono quelli dei due paragrafi successivi, e usano tutti questo stesso schema.
-
-\vspace{0.3cm}
-\noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java, caption=Mock statico di DatabaseManager per intercettare la connessione JDBC.]
-@BeforeEach
-void setUp() throws SQLException {
-    connectionMock = mock(Connection.class);
-    mockedDbManager = mockStatic(DatabaseManager.class);
-    mockedDbManager.when(DatabaseManager::getConnection).thenReturn(connectionMock);
-
-    daoFactoryMock = mock(DaoFactory.class);
-    userDaoMock = mock(UserDao.class);
-    when(daoFactoryMock.createUserDao(connectionMock)).thenReturn(userDaoMock);
-
-    driverService = new DriverService(daoFactoryMock);
-}
-
-@AfterEach
-void tearDown() {
-    if (mockedDbManager != null) {
-        mockedDbManager.close();  // fondamentale: rilascia il mock statico globale
-    }
-}
-\end{lstlisting}
-\end{minipage}
-\vspace{0.3cm}
-
-Con la connessione sotto controllo, si possono verificare separatamente il percorso di successo e quello di fallimento — due test speculari che verificano esattamente le proprietà opposte sulla stessa transazione:
-
-\vspace{0.3cm}
-\noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java]
-@Test
-void testUpdateDriverLocation_Success() throws SQLException {
-    Driver mockDriver = mock(Driver.class);
-    driverService.updateDriverLocation(mockDriver, 43.7696, 11.2558);
-
-    verify(mockDriver, times(1)).updatePosition(43.7696, 11.2558);
-    verify(userDaoMock, times(1)).update(mockDriver);
-    verify(connectionMock, times(1)).commit();
-    verify(connectionMock, times(1)).close();
-}
-\end{lstlisting}
-\end{minipage}
-\vspace{0.3cm}
-
-\vspace{0.3cm}
-\noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java]
-@Test
-void testUpdateDriverLocation_Failure() throws SQLException {
-    doThrow(new RuntimeException("Database error")).when(userDaoMock).update(any(Driver.class));
-
-    assertThrows(RuntimeException.class, () ->
-        driverService.updateDriverLocation(mockDriver, 0.0, 0.0));
-
-    verify(connectionMock, times(1)).rollback();
-    verify(connectionMock, times(1)).close();
-    verify(connectionMock, never()).commit();
-}
-\end{lstlisting}
-\end{minipage}
-\vspace{0.3cm}
-
-La coppia di test non verifica solo che "il metodo non esplode": verifica che, se qualcosa va storto, il sistema non lasci una transazione aperta a metà. Un test che guardasse solo il valore di ritorno non se ne accorgerebbe.
-
-\subsection{Il cuore economico: \texttt{SessionServiceTest}}
-
-Il \texttt{SessionService} è il servizio più esposto del sistema, perché viene invocato ad ogni tick per ogni ricarica in corso ed è l'unico che muove denaro. È quindi anche il più testato (19 test). Ne riportiamo due, scelti perché verificano due proprietà che una semplice ispezione del codice non garantirebbe.
-
-Il primo riguarda \textbf{dove} vengono fatti i controlli di business. Un Driver senza fondi non deve poter aprire una sessione: la regola vive nel dominio (\texttt{ChargingSession.open()}), e il test verifica non solo che l'eccezione venga lanciata, ma che ciò accada \emph{prima} di toccare il database:
-
-\vspace{0.3cm}
-\noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java, caption={La validazione di dominio precede l'accesso al database}]
-InsufficientBalanceException ex = assertThrows(InsufficientBalanceException.class, () ->
-        sessionService.openSession(poorDriver, station, strategy, 20.0)
-);
-assertTrue(ex.getMessage().contains("insufficiente"));
-
-// Il fallimento avviene PRIMA di toccare il DB
-verify(daoFactoryMock, never()).createSessionDao(any());
-\end{lstlisting}
-\end{minipage}
-\vspace{0.3cm}
-
-L'ultima riga è la parte interessante: \texttt{verify(..., never())} sulla factory dei DAO non verifica un risultato, ma un \emph{non-evento}. Fissa per contratto che una sessione senza copertura economica non arrivi nemmeno ad aprire una connessione: un test black-box sul solo valore di ritorno non potrebbe distinguere questo caso da uno in cui il database viene interrogato e poi il lavoro annullato.
-
-Il secondo test verifica l'invariante contabile più importante del sistema, cioè che \textbf{allo Station Operator venga accreditata la sua quota, e solo la sua}. La quota è definita come tariffa operatore $\times$ kWh erogati; sul valore effettivamente accreditato si usa un \texttt{ArgumentCaptor}:
-
-\vspace{0.3cm}
-\noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java, caption={Cattura dell'importo accreditato all'operatore alla chiusura}]
-ChargingSession session = ChargingSession.open(driver, station, ChargingType.FAST, 20.0);
-session.addTick(10.0, new BigDecimal("5.00"));   // kWh erogati = 10.0
-
-sessionService.closeSession(session);
-
-ArgumentCaptor<BigDecimal> captor = ArgumentCaptor.forClass(BigDecimal.class);
-verify(fullOperator, times(1)).addEarnings(captor.capture());
-assertEquals(0, captor.getValue().compareTo(new BigDecimal("3.00")),
-        "La quota deve essere 0.30 x 10 = 3.00");
-\end{lstlisting}
-\end{minipage}
-\vspace{0.3cm}
-
-Due dettagli meritano attenzione. Il primo è il confronto: si usa \texttt{compareTo(...) == 0} e non \texttt{assertEquals} diretto sui \texttt{BigDecimal}, perché \texttt{BigDecimal.equals()} confronta anche la \emph{scala}, e considererebbe \texttt{3.00} diverso da \texttt{3.0}. Su un test che verifica denaro, un confronto ingenuo produrrebbe falsi allarmi: si confrontano i \emph{valori}, non la loro rappresentazione. Il secondo è la scelta di \texttt{times(1)}: insieme ai test gemelli \texttt{testCloseSession\_NoOperator\_NoCredit} e \texttt{testForceClose\_CreditsOperator}, questo verifica la guardia \texttt{wasActive} discussa nel paragrafo~\ref{subsec:sessionservice}, cioè che l'operatore non possa essere pagato due volte per la stessa energia.
-
-\subsection{La concorrenza sulle prenotazioni: \texttt{StationServiceTest}}
-
-L'altro punto delicato è l'acquisizione di una prenotazione, dove il servizio si affida a un update condizionale del database anziché a una coppia lettura/scrittura. Il test simula lo scenario di corsa mockando la risposta del DAO: \texttt{acquireAtomicHold} restituisce \texttt{false}, cioè "la \texttt{UPDATE} non ha aggiornato alcuna riga, qualcun altro è arrivato prima".
-
-\vspace{0.3cm}
-\noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java, caption={Il perdente della corsa non prenota, e non lascia una transazione a metà}]
-// Simuliamo che qualcun altro abbia gia' preso la colonnina
-when(stationDaoMock.acquireAtomicHold(100L, 1L)).thenReturn(false);
-
-StationNotAvailableException exception = assertThrows(StationNotAvailableException.class, () ->
-        stationService.hold(mockDriver, mockStation));
-
-verify(mockStation, never()).setReserved(any());   // niente mutazione in memoria
-verify(connectionMock, never()).commit();          // niente commit
-verify(connectionMock, times(1)).rollback();       // e la transazione viene chiusa pulita
-\end{lstlisting}
-\end{minipage}
-\vspace{0.3cm}
-
-Le tre \texttt{verify} finali sono il vero contenuto del test, e verificano tre proprietà distinte: che l'oggetto in memoria non venga sporcato con una prenotazione che il database ha rifiutato (altrimenti memoria e DB divergerebbero), che nulla venga confermato, e che la transazione venga esplicitamente annullata invece di essere semplicemente abbandonata. Il test speculare (\texttt{testHold\_Success}) verifica il percorso opposto sulla stessa transazione.
-
-\subsection{L'emergenza termica: \texttt{LoadBalancerServiceTest}}
-
-Qui i mock statici diventano due: oltre a \texttt{DatabaseManager} va sostituito anche il Singleton \texttt{GridCluster}, altrimenti il test andrebbe a leggere la cache vera della rete.
-
-\vspace{0.3cm}
-\noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java, caption=Doppio mock statico: connessione JDBC e Singleton GridCluster.]
-mockedDbManagerStatic = mockStatic(DatabaseManager.class);
-mockedDbManagerStatic.when(DatabaseManager::getConnection).thenReturn(connectionMock);
-
-gridClusterMock = mock(GridCluster.class);
-mockedGridClusterStatic = mockStatic(GridCluster.class);
-mockedGridClusterStatic.when(GridCluster::getInstance).thenReturn(gridClusterMock);
-\end{lstlisting}
-\end{minipage}
-\vspace{0.3cm}
-
-Il test lancia l'evento \texttt{THERMAL\_ALERT} e controlla tre cose in un colpo solo: che la colonnina venga messa in sovraccarico, che la modifica finisca davvero nel database, e che la chiusura della sessione venga \emph{delegata} al \texttt{SessionService}.
-
-\vspace{0.3cm}
-\noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java]
-loadBalancerService.update(transformerMock, TransformerEvent.THERMAL_ALERT);
-
-verify(stationMock, times(1)).setOverloaded();
-verify(stationDaoMock, times(1)).update(stationMock);
-verify(connectionMock, times(1)).commit();
-verify(sessionServiceMock, times(1)).forceClose(sessionMock);
-\end{lstlisting}
-\end{minipage}
-\vspace{0.3cm}
-
-L'ultima riga è quella che conta: il \texttt{LoadBalancerService} non sa \emph{come} si chiude una sessione (rimborso, wallet, ricevuta), sa solo \emph{che} va chiusa. È il punto dell'Observer descritto nel Capitolo~\ref{ch:pattern}, verificato da un test invece che affermato a parole.
 
 \section{Livello 2: Persistence Layer (DAO)}
 
-I test dei DAO non usano mock: interrogano un database vero, creato all'avvio della classe di test con lo stesso \texttt{scheme.sql} della produzione. Le query vengono quindi eseguite davvero, contro le tabelle e i vincoli reali, non contro un'imitazione.
+I test dei DAO non usano mock: le query vengono eseguite davvero su database H2, con tabelle e vincoli reali, creato all'avvio della classe di test con lo stesso file \texttt{scheme.sql} della produzione.
 
-C'è però un limite che va detto subito, perché è la prima cosa che salta all'occhio: in produzione i DAO parlano con \textbf{PostgreSQL}, mentre questi test girano su \textbf{H2}. Anche in modalità \texttt{MODE=PostgreSQL}, H2 resta un motore diverso: la sintassi che accetta è quasi la stessa, ma non è garantito che lo siano tutti i comportamenti ai bordi (conversioni di tipo, ordinamenti, messaggi d'errore). Un test verde su H2 non è quindi la prova assoluta che la stessa query passi su Postgres.
+Nonostante il prodotto finale utilizzi PostgreSQL è un compromesso accettato consapevolmente in quanto H2 gira in memoria, parte in un istante e non richiede un server acceso per lanciare i test.
 
-È un compromesso preso in modo consapevole: H2 gira in memoria, parte in un istante e non richiede di avere un server Postgres acceso per lanciare i test. In cambio si rinuncia a testare il motore di produzione. Ci siamo tenuti stretti su una cosa, però: lo schema caricato è lo \emph{stesso file} usato in produzione, quindi se una query rompesse un vincolo o sbagliasse un nome di colonna, il test se ne accorgerebbe comunque.
+\subsection{\texttt{PostgresStationDaoTest}}
+
+In questa classe è stata testata la persistenza delle colonnine. Abbiamo scelto \texttt{testAcquireAtomicHold} perché è il test più importante dell'intera classe: chiude il cerchio lasciato aperto da \texttt{StationServiceTest}, dove la risposta del DAO era simulata. Qui i due tentativi di prenotazione vengono eseguiti sul database vero, uno dopo l'altro, e il secondo deve fallire perché la colonnina non è più \texttt{ACTIVE}: è l'\texttt{UPDATE} condizionale stesso a impedire la doppia prenotazione. Il secondo test verifica invece l'\texttt{ORDER BY} della ricerca per prossimità, con il filtro sulle sole colonnine attive.
 
 \vspace{0.3cm}
-\noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java, caption=Avvio di H2 con lo schema reale di produzione.]
-@BeforeAll
-static void startDatabase() throws SQLException {
-    String url = "jdbc:h2:mem:chargenet_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;"
-               + "DEFAULT_NULL_ORDERING=HIGH;INIT=RUNSCRIPT FROM './src/main/resources/scheme.sql'";
-    connection = DriverManager.getConnection(url, "sa", "");
+\begin{lstlisting}[language=Java, style=testcode, caption={Estratto di codice della classe \texttt{PostgresStationDaoTest}}]
+@Test
+void testAcquireAtomicHold() throws SQLException {
+    // Due Driver (ID 1 e 2) e una colonnina ACTIVE inseriti nel database reale
+    // ... setup delle tabelle omesso ...
+
+    // Il primo guidatore prenota
+    boolean success = stationDao.acquireAtomicHold(1L, 1L);
+    assertTrue(success, "La prima prenotazione deve avere successo: la stazione e' ACTIVE");
+
+    // Rileggiamo direttamente dal database lo stato effettivo della riga
+    try (Statement stmt = connection.createStatement();
+         ResultSet rs = stmt.executeQuery(
+             "SELECT status, reserved_by_id, expiration_timestamp FROM charging_stations WHERE id = 1")) {
+        assertTrue(rs.next());
+        assertEquals("RESERVED", rs.getString("status"));
+        assertEquals(1L, rs.getLong("reserved_by_id"));
+        assertNotNull(rs.getTimestamp("expiration_timestamp"));
+    }
+
+    // Il secondo guidatore tenta la stessa colonnina: l'UPDATE non aggiorna nulla
+    boolean failedAttempt = stationDao.acquireAtomicHold(1L, 2L);
+    assertFalse(failedAttempt, "La seconda prenotazione DEVE fallire: la stazione non e' piu' ACTIVE");
+}
+
+@Test
+void testFindNearestAvailable() {
+    ChargingStation s1 = createMockStation("Vicino", 10.0, 10.0, StationStatus.ACTIVE);
+    ChargingStation s2 = createMockStation("Lontano", 50.0, 50.0, StationStatus.ACTIVE);
+    ChargingStation s3 = createMockStation("Vicino ma Rotta", 10.1, 10.1, StationStatus.OVERLOADED);
+    stationDao.save(s1);
+    stationDao.save(s2);
+    stationDao.save(s3);
+
+    List<ChargingStation> nearest =
+            stationDao.findNearestAvailable(11.0, 11.0, ConnectorType.TYPE_2, null, null);
+
+    assertEquals(2, nearest.size(), "Deve trovare solo le 2 stazioni ACTIVE");
+    assertEquals(s1.getId(), nearest.get(0).getId(), "La prima deve essere la piu' vicina");
+    assertEquals(s2.getId(), nearest.get(1).getId(), "La seconda deve essere la piu' lontana");
 }
 \end{lstlisting}
-\end{minipage}
 \vspace{0.3cm}
 
-Poiché la connessione è condivisa da tutta la classe (\texttt{@BeforeAll}, non \texttt{@BeforeEach}, per non pagare il costo di riavviare H2 ad ogni singolo test), ogni test deve invece garantire di ripartire da una tabella vuota. Questo pone un problema: la tabella \texttt{charging\_sessions} ha una foreign key verso \texttt{charging\_stations}, quindi uno svuotamento diretto verrebbe rifiutato dal database finché non si disattivano temporaneamente i vincoli:
+\subsection{\texttt{PostgresSessionDaoTest}}
+
+In questa classe è stata testata la persistenza delle sessioni di ricarica. Abbiamo scelto il test sull'aggregazione dell'energia venduta perché è una query che il livello di business non potrebbe verificare da solo: la somma è calcolata dal database e non in Java. Il test ne controlla entrambi i rami, cioè il totale su più sessioni completate e il caso di un operatore senza sessioni, dove è il \texttt{COALESCE} della query a dover garantire \texttt{0.0} anziché \texttt{null}.
 
 \vspace{0.3cm}
-\noindent\begin{minipage}{\linewidth}
-\begin{lstlisting}[language=Java, caption=Pulizia delle tabelle rispettando temporaneamente i vincoli di integrità.]
-try (Statement stmt = connection.createStatement()) {
-    stmt.execute("SET REFERENTIAL_INTEGRITY FALSE");
+\begin{lstlisting}[language=Java, style=testcode, caption={Estratto di codice della classe \texttt{PostgresSessionDaoTest}}]
+@Test
+void testSumEnergyByOperatorId() {
+    ChargingSession completed1 = ChargingSession.reconstitute(
+            null, Driver.reconstitute(2L), ChargingStation.reconstitute(1L),
+            ChargingType.FAST, 10.0, 80.0, 50.5, new BigDecimal("20.00"),  // 50.5 kWh erogati
+            SessionStatus.COMPLETED,
+            LocalDateTime.now().minusHours(3), LocalDateTime.now().minusHours(2));
 
-    stmt.execute("TRUNCATE TABLE charging_sessions RESTART IDENTITY");
-    stmt.execute("TRUNCATE TABLE charging_stations RESTART IDENTITY");
-    stmt.execute("TRUNCATE TABLE users RESTART IDENTITY");
-    stmt.execute("TRUNCATE TABLE power_transformers RESTART IDENTITY");
+    ChargingSession completed2 = ChargingSession.reconstitute(
+            null, Driver.reconstitute(2L), ChargingStation.reconstitute(1L),
+            ChargingType.ECO, 50.0, 100.0, 20.0, new BigDecimal("8.00"),   // 20.0 kWh erogati
+            SessionStatus.COMPLETED,
+            LocalDateTime.now().minusHours(6), LocalDateTime.now().minusHours(4));
 
-    // ... reinserimento dei dati minimi necessari (operatore, driver, trasformatore, stazione) ...
+    sessionDao.save(completed1);
+    sessionDao.save(completed2);
 
-    stmt.execute("SET REFERENTIAL_INTEGRITY TRUE");
+    double totalEnergy = sessionDao.sumEnergyByOperatorId(1L);
+    double emptyEnergy = sessionDao.sumEnergyByOperatorId(99L);
+
+    assertEquals(70.5, totalEnergy, 0.001, "La somma deve essere 50.5 + 20.0 = 70.5 kWh");
+    assertEquals(0.0, emptyEnergy, 0.001, "Senza sessioni il COALESCE deve garantire 0.0");
 }
 \end{lstlisting}
-\end{minipage}
 \vspace{0.3cm}
-
-Il vantaggio di questo approccio rispetto a un semplice \texttt{DELETE FROM}: \texttt{RESTART IDENTITY} azzera anche i contatori auto-incrementali, così ogni test parte con ID prevedibili
