@@ -21,38 +21,40 @@
 \endlastfoot
 
 % --- CONTENUTO ---
-Nome & Ricarica Veicolo (Charge Vehicle) \\ \hline
-Livello & Obiettivo Utente (User Goal) \\ \hline
-Descrizione & Il Conducente avvia una sessione di ricarica su una stazione selezionata, scegliendo una specifica strategia di ricarica (Fast o Eco). La sessione viene eseguita in tempo reale: il Grid Monitor la fa avanzare e l'interfaccia utente (Live Session UI) ne osserva lo stato tramite polling. \\ \hline
+Nome & Ricarica Veicolo \\ \hline
+Livello & Obiettivo Utente \\ \hline
+Descrizione & Il Conducente avvia una sessione di ricarica su una colonnina selezionata, scegliendo la strategia Fast Charge oppure Eco Charge. \\ \hline
 Pre-condizioni & \parbox[t]{\linewidth}{%
 Il Conducente ha effettuato l'accesso.\\
-Il saldo del Portafoglio (Wallet) del Conducente copre almeno il costo di 5 kWh presso la stazione selezionata, calcolato per il piano del Conducente (\texttt{station.priceFor(5.0, driver)}) e la strategia selezionata.\\
-La stazione selezionata è \texttt{ACTIVE} (oppure \texttt{RESERVED} dal Conducente) ed è compatibile con il connettore del veicolo.
+Il saldo del portafoglio copre almeno il costo di 5 kWh presso la colonnina scelta.
 } \\ \hline
-Post-condizioni & La sessione è \texttt{COMPLETED}, il costo (detratto in modo incrementale per ogni tick durante la ricarica) è interamente addebitato sul Portafoglio, viene registrata una Transazione di tipo \texttt{CHARGE} e la stazione torna allo stato \texttt{ACTIVE}. \\ \hline
+Post-condizioni & La sessione è in stato \texttt{COMPLETED}, il costo finale è stato scalato dal portafoglio, è registrata una \texttt{Transaction} di tipo \texttt{CHARGE} e la colonnina è tornata \texttt{ACTIVE}. \\ \hline
 Attori & Conducente, Grid Monitor (Sistema) \\ \hline
 Unit Test & \texttt{SessionServiceTest} \\ \hline
-Flusso Principale & 
+Flusso Principale &
 \begin{enumerate}[leftmargin=*, nosep]
-    \item Il Conducente seleziona una stazione dalla lista delle stazioni disponibili e compatibili più vicine (\texttt{ACTIVE}, o \texttt{RESERVED} da lui stesso).
-    \item Il Conducente apre la Live Session per quella stazione.
-    \item Il Conducente sceglie una strategia di ricarica: Fast Charge o Eco Charge.
-    \item Il Conducente inserisce la percentuale di batteria attuale del veicolo.
-    \item Il Conducente preme Start; il sistema valida il saldo del Portafoglio e la disponibilità della stazione, imposta la stazione su \texttt{BUSY} e apre la sessione.
-    \item Il Grid Monitor, ogni 5s, aggiorna batteria e kWh erogati, accumula il calore sul trasformatore di alimentazione e deduce i fondi in base alla strategia (lo sconto del piano si applica solo alla quota tariffaria della piattaforma).
-    \item La Live Session UI interroga (poll) lo stato della sessione e riflette in tempo reale batteria, kWh, costo attuale e Portafoglio.
-    \item Il Conducente preme Stop (oppure la sessione si auto-completa quando la batteria raggiunge il 100\%).
-    \item Il sistema calcola i kWh totali erogati, il costo finale e registra la Transazione.
-    \item Il sistema reimposta lo stato della stazione su \texttt{ACTIVE} e mostra il popup di valutazione (rating).
+    \item Il Conducente seleziona una colonnina dall'elenco di quelle disponibili.
+    \item Conferma la scelta di una colonnina \texttt{ACTIVE}, oppure \texttt{RESERVED} da lui stesso.
+    \item Sceglie la strategia di ricarica: Fast Charge oppure Eco Charge.
+    \item Inserisce la percentuale di batteria attuale del veicolo.
+    \item Il sistema verifica la compatibilità del connettore, la disponibilità della colonnina e che il saldo copra almeno 5 kWh.
+    \item Il sistema porta la colonnina in stato \texttt{BUSY} e apre la sessione.
+    \item Il \texttt{GridMonitor} fa avanzare periodicamente la batteria e addebita il costo di ogni tick (Tab.~\ref{tab:uc_update_state}).
+    \item Il Conducente interrompe la ricarica.
+    \item Il sistema calcola i kWh totali erogati e il costo finale, emette la ricevuta e accredita allo Station Operator la sua quota.
+    \item Il sistema porta la sessione a \texttt{COMPLETED} e riporta la colonnina ad \texttt{ACTIVE}.
 \end{enumerate} \\ \hline
-Flussi Alternativi & 
-\textbf{1. Stazioni non disponibili nascoste:} \newline
-1.1. Le stazioni \texttt{BUSY}, \texttt{OVERLOADED}, incompatibili o \texttt{RESERVED} da altri non sono mostrate in lista, impedendo al Conducente di selezionare una stazione non disponibile. \newline\newline
-\textbf{5. Saldo insufficiente:} \newline
-5.1. Se il saldo è inferiore al costo di 5 kWh, il sistema nega l'avvio e mostra: "Credito insufficiente per avviare la sessione." (\texttt{InsufficientBalanceException}). \newline\newline
-\textbf{6-7. Allarme Termico (Observer attivato):} \newline
-6.1. Se la temperatura del trasformatore supera i 90°C, il \texttt{LoadBalancerService} (Observer) imposta tutte le stazioni su quel trasformatore su \texttt{OVERLOADED} e chiude forzatamente le relative sessioni attive. \newline
-6.2. La sessione diventa \texttt{INTERRUPTED\_THERMAL} e la UI mostra: "Arresto di emergenza: surriscaldamento del sistema". \newline
-6.3. Il sistema elabora un rimborso automatico per i kWh pagati ma non erogati. \\ \hline
+Flussi Alternativi &
+\textbf{1. Colonnina non disponibile:} \newline
+1.1. Le colonnine \texttt{BUSY}, \texttt{OVERLOADED}, \texttt{SUSPENDED}, incompatibili col connettore o \texttt{RESERVED} da altri non compaiono in elenco: il Conducente non può selezionarle. \newline\newline
+\textbf{5. Credito insufficiente:} \newline
+5.1. Se il saldo non copre il costo di 5 kWh, il sistema rifiuta l'apertura e mostra il messaggio \textit{"Credito insufficiente per avviare la sessione"}. \newline
+5.2. Il controllo appartiene all'entità di dominio \texttt{ChargingSession}, quindi il rifiuto avviene prima di qualsiasi accesso al database. \newline\newline
+\textbf{8. Batteria al 100\%:} \newline
+8.1. Se la batteria raggiunge il 100\%, la sessione si chiude da sola senza attendere il comando del Conducente, seguendo poi i passi 9 e 10. \newline\newline
+\textbf{7. Allarme Termico:} \newline
+7.1. Se la temperatura del trasformatore supera i 90\,°C, il \texttt{LoadBalancerService} porta tutte le colonnine di quel trasformatore a \texttt{OVERLOADED} e ne interrompe le sessioni in corso. \newline
+7.2. La sessione passa a \texttt{INTERRUPTED\_THERMAL} e la UI mostra il messaggio \textit{"Arresto di emergenza: surriscaldamento del sistema"}. \newline
+7.3. Il Conducente viene rimborsato del costo dell'ultimo tick, cioè dell'energia pagata ma non erogata al momento dello stacco. \\ \hline
 
 \end{xltabular}
