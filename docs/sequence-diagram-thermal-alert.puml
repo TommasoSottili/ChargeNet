@@ -17,7 +17,6 @@ alt temperatura > 90°C
     note right of PT
         Il Transformer conosce solo l'interfaccia Observer:
         non sa che ci saranno OVERLOADED né rimborsi.
-        Nuovo reattore = nuovo Observer, zero modifiche qui.
     end note
     LB -> GC : getStationsForTransformer(id)
 

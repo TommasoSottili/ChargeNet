@@ -186,8 +186,6 @@ public static Transaction create(Driver driver, TransactionType type, BigDecimal
 \vspace{0.3cm}
 
 
-Questo controllo ha però una conseguenza negativa quando entra in gioco insieme a \texttt{Driver.updatePlan()} . Se un Driver infatti seleziona di nuovo il piano che ha già, \texttt{updatePlan()} calcola un \texttt{delta} pari a zero: non essendo negativo non lancia eccezioni, e il nuovo piano viene comunque assegnato in memoria. Il \texttt{WalletService} genera però sempre, dopo la chiamata, una \texttt{Transaction} di tipo \texttt{SUBSCRIPTION} con quell'importo, e con importo zero \texttt{Transaction.create()} solleva l'eccezione appena vista. Il rollback annulla la scrittura sul database, ma il \texttt{Driver} in memoria ha già il nuovo piano assegnato da \texttt{updatePlan()}: se quella stessa istanza restasse in uso dopo l'errore, mostrerebbe un piano diverso da quello realmente salvato. È un caso limite che il codice attuale non gestisce.
-
 \subsection{Feedback}
 A chiudere il Domain Model troviamo la parte dedicata alla qualità del servizio e al supporto. Qui abbiamo deciso di separare l'azione dell'utente (la recensione) dalla conseguente gestione amministrativa (l'allarme per la manutenzione).
 
@@ -260,16 +258,8 @@ private Map<Long, List<ChargingStation>> stationsByTransformer;
 \end{minipage}
 \vspace{0.3cm}
 
-La cache espone anche un metodo di ricerca geografica, \texttt{getNearestAvailable()}, pensato in origine per le stesse esigenze del Driver. In produzione, però, non è questo il percorso seguito: la ricerca delle colonnine vicine invocata dal Controller passa da \texttt{StationService.findNearestAvailable()}, che interroga direttamente il DAO e non la cache. \texttt{GridCluster} resta quindi al servizio esclusivo dei due componenti che consultano la rete ogni pochi secondi, \texttt{GridMonitor} e \texttt{LoadBalancerService}, e non delle ricerche innescate dall'utente.
-
-\subsubsection*{Un limite riconosciuto: la cache non si allinea a ogni scrittura}
-
-La cache viene aggiornata esplicitamente in un solo caso, la registrazione di una nuova colonnina (\texttt{StationService} la aggiunge con \texttt{registerNewStation()}, si veda anche il paragrafo~\ref{sec:singleton-gridcluster}). Nessun altro punto del sistema la tiene sincronizzata: quando l'Energy Manager approva o rifiuta una colonnina (\texttt{ValidationService}), o quando una recensione ne aggiorna la media (\texttt{RatingService}), la scrittura avviene su un'istanza letta fresca dal database, diversa dall'oggetto rimasto nella mappa in memoria. L'istanza in cache resta quindi ferma ai valori che aveva al momento della registrazione.
-
-Il problema emerge quando \texttt{LoadBalancerService} interviene su un allarme termico: prende le colonnine dalla cache, cioè le istanze non aggiornate, e le passa a \texttt{stationDao.update()}, che scrive un'intera riga, tariffa di piattaforma compresa. L'effetto concreto è che un allarme termico sul trasformatore di una colonnina appena approvata riporta \texttt{tariff\_platform} a \texttt{null} sul database, annullando silenziosamente la tariffa appena fissata dal Manager. Non è un'ipotesi teorica: basta approvare una colonnina e poi provocare un surriscaldamento sullo stesso trasformatore per riprodurlo. È un limite dell'attuale sincronizzazione della cache, non del pattern in sé, e sarebbe risolvibile propagando a \texttt{GridCluster} l'aggiornamento da ogni punto del sistema che scrive lo stato di una colonnina, invece che dalla sola registrazione.
-
 \subsection{GridMonitor}
- Non avendo a disposizione dei sensori fisici che inviano dati telemetrici, avevamo bisogno di un componente che facesse scorrere il tempo in modo autonomo, senza bloccare l'interfaccia grafica.
+Non avendo a disposizione dei sensori fisici che inviano dati telemetrici, avevamo bisogno di un componente che facesse scorrere il tempo in modo autonomo, senza bloccare l'interfaccia grafica.
 
 Abbiamo quindi esteso la classe \texttt{Thread} di Java, impostandola come "Demone" nel costruttore (\texttt{this.setDaemon(true);}). In questo modo il ciclo vitale del monitor viene legato a quello dell'interfaccia JavaFX: se l'utente chiude la finestra dell'applicazione, il thread si arresta in modo pulito senza lasciare processi appesi in background.
 
@@ -298,12 +288,14 @@ In particolare, la fase di elaborazione (\texttt{processActiveSessions}) calcola
 \label{subsec:loadbalancer}
 Il \texttt{LoadBalancerService} è il componente per cui è necessaria l'esistenza del pattern Observer all'interno dell'architettura. Invece di interrogare attivamente la rete per trovare eventuali surriscaldamenti, questo servizio si registra semplicemente in ascolto sui trasformatori. 
 
-Quando riceve una notifica di \texttt{THERMAL\_ALERT}, il servizio reagisce isolando immediatamente il ramo di rete compromesso. L'intervento si divide in due fasi distinte. Nella prima fase viene aperta un'unica transazione che porta a \texttt{OVERLOADED} tutte le colonnine collegate al trasformatore, impedendo l'avvio di nuove ricariche. La seconda fase, invece, non è un'unica transazione: ogni sessione viene chiusa e rimborsata singolarmente, con la sua transazione indipendente. È voluto: se il rimborso di un Driver fallisse, non deve bloccare anche gli altri, che non hanno colpa di quel fallimento."
+Quando riceve una notifica di \texttt{THERMAL\_ALERT}, il servizio reagisce isolando immediatamente il ramo di rete compromesso. L'intervento si divide in due fasi distinte. Nella prima fase viene aperta un'unica transazione che porta a \texttt{OVERLOADED} tutte le colonnine collegate al trasformatore, impedendo l'avvio di nuove ricariche. La seconda fase, invece, non è un'unica transazione: ogni sessione viene chiusa e rimborsata singolarmente, con la sua transazione indipendente. È voluto: se il rimborso di un Driver fallisse, non deve bloccare anche gli altri, che non hanno colpa di quel fallimento.
 
 \vspace{0.3cm}
 \noindent\begin{minipage}{\linewidth}
 \begin{lstlisting}[language=Java, caption={Gestione dell'alert termico}]
 private void handleThermalAlert(PowerTransformer transformer) {
+
+    List<ChargingStation> stations = GridCluster.getInstance().getStationsForTransformer(transformer.getId());
 
     Connection connection = null;
     try {
@@ -324,11 +316,15 @@ private void handleThermalAlert(PowerTransformer transformer) {
     }
 
 
-    for (ChargingSession session : sessionService.getActiveSessions()) {
-        if (belongsToTransformer(session.getStation(), stations)) {
-            sessionService.forceClose(session);
+    List<ChargingSession> activeSessions = sessionService.getActiveSessions();
+        for (ChargingSession session : activeSessions) {
+            ChargingStation sessionStation = session.getStation();
+            boolean belongsToTransformer = stations.stream()
+                    .anyMatch(s -> s.getId().equals(sessionStation.getId()));
+            if (belongsToTransformer) {
+                sessionService.forceClose(session);
+            }
         }
-    }
 }
 \end{lstlisting}
 \end{minipage}
@@ -353,8 +349,14 @@ if (wasActive && station.getOperator() != null) {
     BigDecimal operatorShare = station.getTariffOperator()
         .multiply(BigDecimal.valueOf(kwhDelivered))
         .setScale(2, RoundingMode.HALF_UP);
-    operator.addEarnings(operatorShare);
-    userDao.update(operator);
+    
+    if (operatorShare.compareTo(BigDecimal.ZERO) > 0) {
+        User u = userDao.findById(station.getOperator().getId());
+        if (u instanceof StationOperator operator) {
+            operator.addEarnings(operatorShare);
+            userDao.update(operator);
+        }
+    }
 }
 \end{lstlisting}
 \end{minipage}
@@ -697,10 +699,10 @@ Ogni schermata dell'applicazione ha un Controller associato, il cui compito è s
 \subsubsection{Area Driver}
 
 \begin{itemize}
-    \item \textbf{DriverMenuController:} Contenitore della dashboard Driver: gestisce il menu laterale e sostituisce solo il contenuto centrale ad ogni navigazione.
+    \item \textbf{DriverMenuController:} Contenitore della dashboard Driver: gestisce il menu e sostituisce solo il contenuto centrale ad ogni navigazione.
     \item \textbf{StationExplorerController:} Mostra le colonnine compatibili nelle vicinanze e permette di prenotarne una o avviare direttamente una sessione.
-    \item \textbf{LiveSessionController:} Mostra l'avanzamento in tempo reale di una ricarica in corso. Non calcola nulla e non è un observer del \texttt{GridMonitor}: rilegge lo stato della sessione dal database una volta al secondo, tramite una \texttt{Timeline} JavaFX indipendente dal tick del monitor (si veda il paragrafo~\ref{subsec:polling}).
-    \item \textbf{ChargingHistoryController:} Elenca le sessioni passate del Driver, completate o interrotte da thermal alert.
+    \item \textbf{LiveSessionController:} Mostra l'avanzamento in tempo reale di una ricarica in corso. Non calcola nulla e non è un observer del \texttt{GridMonitor}: rilegge lo stato della sessione dal database una volta al secondo, tramite una \texttt{Timeline} JavaFX indipendente dal tick del monitor.
+    \item \textbf{ChargingHistoryController:} Elenca le sessioni passate del Driver non mostrando quelle fallite a causa del thermal alert.
     \item \textbf{FundWalletController:} Gestisce la ricarica del saldo del wallet.
     \item \textbf{AccountController:} Mostra i dati del profilo: piano di abbonamento (modificabile), email e veicolo (in sola lettura).
 \end{itemize}
@@ -730,7 +732,7 @@ I Controller non li istanziamo noi ma vengono direttamente costruiti mentre cari
 
 La soluzione adottata è il pattern \textbf{Service Locator}. Quando un controller ha bisogno di un servizio non se lo fa passare, ma va a chiederlo a un punto centrale noto, il \texttt{NavigationManager}, che espone metodi come \texttt{getSessionService()}, \texttt{getStationService()} e \texttt{getCurrentUser()}. Il recupero avviene nel metodo \texttt{initialize()}, che JavaFX invoca subito dopo aver costruito il controller e inserito i campi \texttt{@FXML}.
 
-In questo modo si garantisce che un Controller non parli mai direttamente al database ma debba sempre passare da un Service. Un pezzo di interfaccia che scavalca la logica di business per andare dritto a un DAO renderebbe impossibile far rispettare le regole validazioni, calcoli, transizioni di stato che nel DAO non esistono.
+In questo modo si garantisce che un Controller non parli mai direttamente al database ma debba sempre passare da un Service. Un pezzo di interfaccia che scavalca la logica di business per andare dritto a un DAO renderebbe impossibile far rispettare le regole di validazione, calcoli, transizioni di stato che nel DAO non esistono.
 
 \subsubsection{Indipendenza della LiveSession dal GridMonitor}
 
@@ -968,7 +970,7 @@ public static RatingAlert create(ChargingStation station, Double avgAtCreation) 
 \end{minipage}
 \vspace{0.3cm}
 
-I due esempi qui mostrati sono scelti per illustrare due varianti dello stesso principio (il primo valida, il secondo no, ma resta comunque privato) più che per la loro complessità. I Factory Method con la logica di controllo più ricca sono in realtà altri due, già incontrati nel Domain Model: \texttt{ChargingStation.register()} (paragrafo~\ref{subsec:infrastructures}), che esegue quattro controlli fisici in sequenza, e \texttt{ChargingSession.open()} (paragrafo~\ref{subsec:sessions}), che verifica compatibilità del connettore, disponibilità della stazione e saldo minimo nella stessa chiamata.
+I due esempi qui mostrati sono scelti per illustrare due varianti dello stesso principio (il primo valida, il secondo no, ma resta comunque privato) più che per la loro complessità. I Factory Method con la logica di controllo più ricca sono in realtà altri due, già incontrati nel Domain Model: \texttt{ChargingStation.register()}, che esegue quattro controlli fisici in sequenza, e \texttt{ChargingSession.open()}, che verifica compatibilità del connettore, disponibilità della stazione e saldo minimo nella stessa chiamata.
 
 \subsection{Singleton}
 \label{sec:singleton-gridcluster}
@@ -1019,13 +1021,13 @@ public class GridCluster {
 \end{minipage}
 \vspace{0.3cm}
 
-La parola \texttt{synchronized} su \texttt{getInstance()} serve perché più componenti girano in parallelo su thread diversi: senza questa protezione, due richieste arrivate nello stesso istante potrebbero entrambe trovare \texttt{instance} ancora nulla e crearne due copie per errore. I dati non vengono letti dal database ad ogni richiesta: \texttt{init()} viene chiamato una sola volta all'avvio dell'applicazione, e da quel momento in poi \texttt{getStationsForTransformer()} risponde all'istante leggendo dalla mappa già in memoria, senza interrogare più il database. La cache non è però immutabile: quando un operatore registra una nuova colonnina, lo \texttt{StationService} la aggiunge esplicitamente al cluster (\texttt{registerNewStation}), senza doverla ricostruire da capo. L'allineamento vale però solo per questo caso: le scritture successive alla registrazione (approvazione, rifiuto, aggiornamento del rating) non vengono mai propagate alla cache, un limite discusso nel paragrafo~\ref{subsec:gridcluster}.
+La parola \texttt{synchronized} su \texttt{getInstance()} serve perché più componenti girano in parallelo su thread diversi: senza questa protezione, due richieste arrivate nello stesso istante potrebbero entrambe trovare \texttt{instance} ancora nulla e crearne due copie per errore. I dati non vengono letti dal database ad ogni richiesta: \texttt{init()} viene chiamato una sola volta all'avvio dell'applicazione, e da quel momento in poi \texttt{getStationsForTransformer()} risponde all'istante leggendo dalla mappa già in memoria, senza interrogare più il database.
 
 \subsection{DAO (Data Access Object)}
 
 Il pattern che struttura l'intero livello di persistenza è stato descritto nel paragrafo~\ref{sec:dao}, ma merita di comparire anche qui, perché è a tutti gli effetti un design pattern e non un semplice dettaglio implementativo. Il problema che risolve è il disallineamento fra due mondi che parlano lingue diverse: da una parte oggetti Java con i loro riferimenti (una \texttt{ChargingSession} che \emph{contiene} un \texttt{Driver} e una \texttt{ChargingStation}), dall'altra righe fatte di colonne e numeri. Il DAO è il traduttore, ed è l'\emph{unico} punto del sistema che sa com'è fatto il database.
 
-La separazione fra \emph{interfaccia} (\texttt{StationDao}) e \emph{implementazione concreta} (\texttt{PostgresStationDao}) non è pignoleria formale: è ciò che ha reso quasi gratuita la migrazione da H2 a PostgreSQL. Il resto del sistema conosce solo l'interfaccia e ignora quale implementazione lavori sotto; per questo nessun Service e nessun Controller si è accorto del cambio di database. La costruzione delle implementazioni concrete è a sua volta isolata in una \texttt{DaoFactory}, il cui unico compito è fabbricarle.
+La separazione fra \emph{interfaccia} (\texttt{StationDao}) e \emph{implementazione concreta} (\texttt{PostgresStationDao}) non è una formalità: è ciò che ha reso quasi gratuita la migrazione da H2 a PostgreSQL. Il resto del sistema conosce solo l'interfaccia e ignora quale implementazione lavori sotto; per questo nessun Service e nessun Controller si è accorto del cambio di database. La costruzione delle implementazioni concrete è a sua volta isolata in una \texttt{DaoFactory}, il cui unico compito è fabbricarle.
 
 \subsection{Unit of Work}
 

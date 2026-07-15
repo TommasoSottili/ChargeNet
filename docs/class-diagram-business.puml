@@ -68,7 +68,6 @@ package "business" as PKG_BUSINESS #fce3bd {
             + registerNewStation(s: ChargingStation): void
             + getTransformers(): List<PowerTransformer>
             + getStationsForTransformer(id: Long): List<ChargingStation>
-            + getNearestAvailable(lat: double, lon: double): List<ChargingStation>
         }
     }
 
@@ -267,8 +266,8 @@ end note
 note top of GridMonitor
   <b>Thread Safety:</b>
   Il Monitor delega le operazioni
-  ai Service, che applicano lock
-  sul database (ACID).
+  ai Service, che le eseguono in
+  transazioni sul database (ACID).
 end note
 @enduml
 

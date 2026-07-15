@@ -29,7 +29,6 @@ alt APPROVA
             Dominio: valida la transizione.
             Solo PENDING_VERIFICATION → ACTIVE.
             Fissa tariffPlatform (quota piattaforma).
-            Se non è in attesa → IllegalStateException.
         end note
         alt commit
             VS -> SD : update(station)

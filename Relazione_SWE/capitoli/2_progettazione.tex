@@ -293,7 +293,7 @@ Il seguente diagramma rappresenta il presentation layer, cioè l'interfaccia gra
 
 \section{Sequence Diagram}
 
-I diagrammi di sequenza che seguono descrivono alcuni dei flussi più significativi del sistema, mostrando come le varie classi interagiscono tra loro nel tempo per portare a termine un'operazione.
+I diagrammi che seguono descrivono alcuni dei flussi più significativi del sistema, mostrando come le varie classi interagiscono tra loro nel tempo per portare a termine un'operazione.
 
 \subsection{Ciclo di vita del GridMonitor
 }
@@ -439,6 +439,6 @@ Infine, diversi attributi numerici sono protetti da vincoli \texttt{CHECK} diret
 
 È presente un limite, conseguenza della generalizzazione utilizzata: la foreign key \texttt{operator\_id} garantisce solo che l'id referenziato esista in \texttt{Users}, non che quella riga appartenga effettivamente a uno StationOperator; lo stesso vale per \texttt{driver\_id} rispetto ai Driver. Questo vincolo di coerenza fra ruolo e utilizzo non è esprimibile a livello di schema relazionale standard.
 
-Nell' applicativo il problema è comunque risolto dal sistema di tipi di Java, infatti \texttt{StationService.registerStation()} accetta come parametro uno \texttt{StationOperator}, non un generico \texttt{User}, e passargli un \texttt{Driver} non compilerebbe nemmeno. Quanto detto vale per il \emph{codice applicativo} ma non per il database. Una \texttt{INSERT} scritta a mano o uno script di popolamento iniziale, possono benissimo scrivere in \texttt{operator\_id} l'id di un Driver, e il database la accetterebbe subito, perché effettivamente quell'id in \texttt{Users} esiste davvero.
+In realtà il problema è comunque risolto dal sistema di tipi di Java, infatti \texttt{StationService.registerStation()} accetta come parametro uno \texttt{StationOperator}, non un generico \texttt{User}, e passargli un \texttt{Driver} non compilerebbe nemmeno. Quanto detto vale per il \emph{codice} ma non per il database. Una \texttt{INSERT} scritta a mano o uno script di popolamento iniziale, possono benissimo scrivere in \texttt{operator\_id} l'id di un Driver, e il database la accetterebbe subito, perché effettivamente quell'id in \texttt{Users} esiste davvero.
 
 Non è solo un'ipotesi teorica, ma è proprio in questo modo che è passato un bug reale del seed, infatti alcune colonnine erano state attribuite per errore al driver invece che all'operatore, alterandoo poi le dashboard dei guadagni. La conclusione corretta è quindi che la coerenza fra ruolo e riferimento è garantita \emph{dal codice}, non \emph{dallo schema}. E' efficace finché tutte le scritture passano dai Service, ma cade non appena qualcosa scrive nel database aggirandoli. Un'alternativa che avrebbe risolto il problema sarebbe stata tradurre la generalizzazione in tabelle separate per sottotipo, che però avrebbe comportato join aggiuntive su ogni login, motivo per cui si è preferita la semplicità della tabella unica, accettando consapevolmente questo limite.

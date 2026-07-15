@@ -93,6 +93,12 @@ public class WalletService {
             BigDecimal currentFee = (current != null) ? current.getMonthlyFee() : BigDecimal.ZERO;
             BigDecimal delta = plan.getMonthlyFee().subtract(currentFee).setScale(2, RoundingMode.HALF_UP);
 
+            // Stesso piano: differenza nulla → nessun addebito e nessuna ricevuta da 0 €.
+            // Il chiamante ignora il valore di ritorno e ricarica il Driver dal DB, quindi null è sicuro.
+            if (delta.compareTo(BigDecimal.ZERO) == 0) {
+                return null;
+            }
+
             // Regola di business: nessun downgrade "subito"
             if (delta.compareTo(BigDecimal.ZERO) < 0) {
                 throw new IllegalArgumentException(

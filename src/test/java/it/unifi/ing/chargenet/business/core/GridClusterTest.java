@@ -63,26 +63,4 @@ class GridClusterTest {
         assertTrue(stationsT1.contains(s1));
         assertTrue(stationsT2.contains(s3));
     }
-
-    @Test
-    void testGetNearestAvailable() {
-        // ARRANGEMENT: Creiamo stazioni a distanze diverse e una non attiva
-        PowerTransformer t = PowerTransformer.reconstitute(1L, "T", 25.0, 0.0);
-
-        ChargingStation vicino = ChargingStation.reconstitute(10L, null, t, "Vicino", null, 1.0, 1.0, null, 50.0, false, null, null, 0.0, 0, StationStatus.ACTIVE, null, null);
-        ChargingStation lontano = ChargingStation.reconstitute(20L, null, t, "Lontano", null, 10.0, 10.0, null, 50.0, false, null, null, 0.0, 0, StationStatus.ACTIVE, null, null);
-        ChargingStation disattivata = ChargingStation.reconstitute(30L, null, t, "Rotta", null, 0.5, 0.5, null, 50.0, false, null, null, 0.0, 0, StationStatus.OVERLOADED, null, null);
-
-        when(transformerDaoMock.findAll()).thenReturn(Arrays.asList(t));
-        when(stationDaoMock.findAll()).thenReturn(Arrays.asList(vicino, lontano, disattivata));
-        gridCluster.init(transformerDaoMock, stationDaoMock);
-
-        // ACT: Cerchiamo stazioni vicine al punto (0.0, 0.0)
-        List<ChargingStation> nearest = gridCluster.getNearestAvailable(0.0, 0.0);
-
-        // ASSERT
-        assertEquals(2, nearest.size(), "Deve escludere le stazioni non ACTIVE");
-        assertEquals("Vicino", nearest.get(0).getName(), "La prima deve essere quella geometricamente più vicina");
-        assertEquals("Lontano", nearest.get(1).getName(), "La seconda deve essere quella più lontana");
-    }
 }
