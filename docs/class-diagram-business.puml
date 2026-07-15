@@ -236,8 +236,8 @@ LoadBalancerService .up.|> Observer : <<implements>>
 Subject "1" -down-> "*" Observer : notifies >
 
 ' Forziamo l'Observer a puntare in su, verso il blocco Domain
-LoadBalancerService -up-> PowerTransformer : observes >
-LoadBalancerService -up-> TransformerEvent : receives >
+LoadBalancerService .up.> PowerTransformer : observes >
+LoadBalancerService .up.> TransformerEvent : receives >
 
 ' --- PATTERN STRATEGY ---
 ' Usiamo -up-> per mandarlo verso il pacchetto Strategies che ora sta in alto
@@ -250,7 +250,7 @@ ChargingStrategy <|.. EcoChargingStrategy
 GridMonitor -down-> SessionService : tick/billing >
 GridMonitor -down-> StationService : expire holds >
 GridMonitor -down-> RatingService : check alerts >
-GridMonitor -right-> GridCluster : queries >
+GridMonitor .right.> GridCluster : queries >
 
 LoadBalancerService --> SessionService
 

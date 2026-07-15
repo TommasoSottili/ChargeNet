@@ -353,26 +353,26 @@ package "domain" as PKG_DOMAIN #dce7f0 {
     User <|-- EnergyManager
 
     ' Infrastructure
-    StationOperator "1" --> "1..*" ChargingStation    
-    PowerTransformer "1" -left-> "1..*" ChargingStation   
+    StationOperator "1" <-- "1..*" ChargingStation
+    PowerTransformer "1" <-left- "1..*" ChargingStation
     ChargingStation -left-> StationStatus                 
     ChargingStation "1" --> "0..1" Driver                 : reservedBy >
 
     ' Sessions
-    Driver "1" -up-> "*" ChargingSession              
-    ChargingStation "1" -left-> "*" ChargingSession       : hosts >
+    Driver "1" <-up- "*" ChargingSession
+    ChargingStation "1" <-left- "*" ChargingSession       : hosts >
     ChargingSession -left-> SessionStatus 
     ChargingSession -right-> ChargingType : <<uses>>                
 
     ' Financials
-    Driver "  1" *--> "*" Transaction                     : has >
+    Driver "  1" <-down- "*" Transaction                     : has >
     Transaction -left-> TransactionType                   
 
     ' Feedback
-    Driver " 1  " -down-> "*" Rating                      
-    ChargingStation "1" --> "*" Rating                 
-    ChargingSession "1" -down-> "0..1" Rating             : generates >
-    ChargingStation "1" --> "*" RatingAlert               : triggers >
+    Driver " 1  " <-down- "*" Rating
+    ChargingStation "1" <-down- "*" Rating
+    ChargingSession "1" <-down- "0..1" Rating             : generates >
+    ChargingStation "1" <-down- "*" RatingAlert               : triggers >
     RatingAlert -left-> RatingAlertStatus                 : «uses»
 
     ' Enum ricchi
